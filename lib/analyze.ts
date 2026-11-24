@@ -144,7 +144,7 @@ export async function analyzeDocument(
 async function analyzeWithBackupOnly(pages: string[], fileName: string, signal: AbortSignal | undefined, why: string): Promise<TriageReport> {
   const t0 = Date.now();
   const res = await callOpenAICompat(systemPrompt(), userPrompt(pages), signal);
-  const report = buildReport({ pages, fileName, modelJson: res.json, model: { provider: "Mistral (backup, single call)", name: res.model, latencyMs: res.latencyMs } });
+  const report = buildReport({ pages, fileName, modelJson: res.json, model: { provider: `${res.provider ?? "Backup"} (backup, single call)`, name: res.model, latencyMs: res.latencyMs } });
   const u = res.usage ?? { input: 0, output: 0, thinking: 0, cached: 0 };
   report.review_flags.unshift({
     level: "info",
@@ -154,7 +154,7 @@ async function analyzeWithBackupOnly(pages: string[], fileName: string, signal: 
   return {
     ...report,
     pipeline: "v1",
-    usage: { calls: 1, ...u, ms: Date.now() - t0, byTask: [{ task: "backup.single", model: res.model, provider: "Mistral", ms: res.latencyMs, ...u }] },
+    usage: { calls: 1, ...u, ms: Date.now() - t0, byTask: [{ task: "backup.single", model: res.model, provider: res.provider ?? "Backup", ms: res.latencyMs, ...u }] },
     decisionNote: [report.decisionNote, `Backup used because: ${why.split(" Details:")[0]}`].filter(Boolean).join(" "),
   };
 }

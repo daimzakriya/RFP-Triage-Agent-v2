@@ -11,8 +11,60 @@
  */
 import { GEMINI_RESPONSE_SCHEMA, LlmError, type LlmResult } from "./gemini";
 
+interface BackupProvider {
+  name: string;
+  key: string;
+  base: string;
+  models: string[];
+}
+
+/**
+ * Backup providers, tried in order; each with a list of models tried in order.
+ *  FALLBACK_*  : default Mistral. FALLBACK_MODELS defaults to DeepSeek V4.1 Flash (served by
+ *                Mistral; no tokens-per-minute cap on our free account's limits page) and then
+ *                mistral-small-latest (20,000 tokens/min on the free tier).
+ *  FALLBACK2_* : optional second OpenAI-compatible provider, e.g. NVIDIA (build.nvidia.com,
+ *                Nemotron models) or OpenRouter (":free" models). Needs its own key.
+ */
+export function backupProviders(): BackupProvider[] {
+  const out: BackupProvider[] = [];
+  const k1 = process.env.FALLBACK_API_KEY || process.env.MISTRAL_API_KEY;
+  if (k1) {
+    out.push({
+      name: "Mistral",
+      key: k1,
+      base: (process.env.FALLBACK_BASE_URL || "https://api.mistral.ai/v1").replace(/\/$/, ""),
+      models: list(process.env.FALLBACK_MODELS ?? process.env.FALLBACK_MODEL, ["deepseek-v4-1-flash-1017", "mistral-small-latest"]),
+    });
+  }
+  // NVIDIA build.nvidia.com free endpoint (Nemotron). Only NVIDIA_API_KEY is needed.
+  const kn = process.env.NVIDIA_API_KEY;
+  if (kn) {
+    out.push({
+      name: "NVIDIA",
+      key: kn,
+      base: (process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1").replace(/\/$/, ""),
+      models: list(process.env.NVIDIA_MODELS, ["nvidia/nemotron-3-super-120b-a12b", "nvidia/nemotron-3-ultra-550b-a55b"]),
+    });
+  }
+  const k2 = process.env.FALLBACK2_API_KEY;
+  if (k2 && process.env.FALLBACK2_BASE_URL && (process.env.FALLBACK2_MODELS || process.env.FALLBACK2_MODEL)) {
+    out.push({
+      name: process.env.FALLBACK2_NAME || new URL(process.env.FALLBACK2_BASE_URL).hostname,
+      key: k2,
+      base: process.env.FALLBACK2_BASE_URL.replace(/\/$/, ""),
+      models: list(process.env.FALLBACK2_MODELS ?? process.env.FALLBACK2_MODEL, []),
+    });
+  }
+  return out;
+}
+function list(v: string | undefined, dflt: string[]) {
+  const a = (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return a.length ? a : dflt;
+}
+
 export function fallbackConfigured(): boolean {
-  return !!(process.env.FALLBACK_API_KEY || process.env.MISTRAL_API_KEY);
+  return backupProviders().length > 0;
 }
 
 /** Convert Gemini's OpenAPI-style schema into standard JSON Schema. */
@@ -50,11 +102,38 @@ export async function callOpenAICompat(
   user: string,
   signal?: AbortSignal,
   opts: { schema?: object } = {},
+): Promise<LlmResult & { provider?: string }> {
+  const providers = backupProviders();
+  if (!providers.length) throw new LlmError("No backup model is configured.", 503);
+  const problems: string[] = [];
+  let lastStatus = 503;
+  for (const p of providers) {
+    for (const model of p.models) {
+      try {
+        const r = await callOneModel(p, model, system, user, signal, opts);
+        return { ...r, provider: p.name };
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        const e = err as LlmError;
+        problems.push(e.message);
+        lastStatus = e.status ?? 503;
+        // 400/403/404: this model isn't usable with this key → next model. 429/5xx: next model too.
+      }
+    }
+  }
+  throw new LlmError(problems.join("; "), lastStatus === 429 ? 429 : 503);
+}
+
+async function callOneModel(
+  p: BackupProvider,
+  model: string,
+  system: string,
+  user: string,
+  signal: AbortSignal | undefined,
+  opts: { schema?: object },
 ): Promise<LlmResult> {
-  const key = process.env.FALLBACK_API_KEY || process.env.MISTRAL_API_KEY;
-  if (!key) throw new LlmError("No backup model is configured.", 503);
-  const base = (process.env.FALLBACK_BASE_URL || "https://api.mistral.ai/v1").replace(/\/$/, "");
-  const model = process.env.FALLBACK_MODEL || "mistral-small-latest";
+  const key = p.key;
+  const base = p.base;
   const schema = toJsonSchema(opts.schema ?? GEMINI_RESPONSE_SCHEMA);
 
   // Plain JSON mode is supported by every OpenAI-compatible provider; the schema is spelled out in the
@@ -109,7 +188,7 @@ export async function callOpenAICompat(
         /* keep text */
       }
       throw new LlmError(
-        `Backup model ${model}: HTTP ${res.status} (${String(typeof msg === "string" ? msg : JSON.stringify(msg)).slice(0, 200)})${problems.length ? ` after ${problems.length} retr${problems.length === 1 ? "y" : "ies"}` : ""}`,
+        `Backup ${p.name} ${model}: HTTP ${res.status} (${String(typeof msg === "string" ? msg : JSON.stringify(msg)).slice(0, 200)})${problems.length ? ` after ${problems.length} retr${problems.length === 1 ? "y" : "ies"}` : ""}`,
         res.status === 429 ? 429 : res.status === 401 || res.status === 403 ? 502 : 503,
       );
     }
@@ -118,7 +197,7 @@ export async function callOpenAICompat(
     try {
       const u = data?.usage ?? {};
       return {
-        json: JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")),
+        json: parseJsonLoose(text),
         model,
         latencyMs: Date.now() - started,
         usage: { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, thinking: u.completion_tokens_details?.reasoning_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens ?? 0 },
@@ -128,5 +207,18 @@ export async function callOpenAICompat(
       break;
     }
   }
-  throw new LlmError(`The backup model could not produce a report. ${problems.join("; ")}`, 502);
+  throw new LlmError(`Backup ${p.name} ${model} could not produce a report. ${problems.join("; ")}`, 502);
+}
+
+/** Parse a JSON object from a model answer that may include <think> blocks, code fences or prose. */
+export function parseJsonLoose(text: string): unknown {
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/```(?:json)?/g, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const a = cleaned.indexOf("{");
+    const b = cleaned.lastIndexOf("}");
+    if (a >= 0 && b > a) return JSON.parse(cleaned.slice(a, b + 1));
+    throw new Error("no JSON object in answer");
+  }
 }

@@ -105,11 +105,19 @@ One Gemini call returns the whole report; the same verification, coverage and sc
 
 ### Model choice
 
+Why not ChatGPT, DeepSeek or Nemotron directly? ChatGPT's free plan is a chat app, not an API: the OpenAI API is prepaid credits only. DeepSeek's own API is paid (cheap, but needs a top-up). Both open model families are reachable for free through OpenAI-compatible hosts, and the backup layer accepts any of them without code changes:
+
+- DeepSeek through the Mistral key we already have.
+- NVIDIA Nemotron through build.nvidia.com.
+- Many `:free` models through OpenRouter (about 50 requests/day without credit).
+
+Gemini stays primary because its free tier offers the longest context and native structured output.
+
 | Role | Models, in order (configurable) | Why |
 |---|---|---|
 | Extraction workers | `gemini-3.5-flash-lite` → backup `gemini-3.1-flash-lite` → overflow `gemini-3.6-flash`, `gemini-3-flash-preview` (`EXTRACT_MODELS`) | 3 calls per RFP. Both: 1M context, 65K output, 15 RPM / 500 RPD on our free-tier dashboard, built for high-throughput parsing and extraction. Two models = two independent quotas. Overflow goes to the regular Flash models (separate capacity, 20 RPD each) only when both Flash-Lite models are overloaded. |
 | Reasoning (final evaluation) | `gemini-3.8-flash` → `gemini-3.6-flash` → `gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` (`REASON_MODELS`) | 1 call per RFP on the compact compliance dataset. 3.8 Flash has only 5 RPM / 20 RPD, so it is reserved for this step and never used for extraction. |
-| Backup provider | `mistral-small-latest` via `FALLBACK_API_KEY` | Used only when Gemini can't run the pipeline. The Mistral free tier allows 20,000 tokens/minute for this model (larger models return 403 on the free tier), which fits one RFP-sized request a minute. So the backup produces the whole report in a single call instead of the 3 parallel extraction calls, and also serves the small reasoning call if only that step fails. |
+| Backup provider | `deepseek-v4-1-flash-1017` → `mistral-small-latest`, both via the Mistral key `FALLBACK_API_KEY` (`FALLBACK_MODELS`), then NVIDIA **Nemotron 3 Super** → Nemotron 3 Ultra via `NVIDIA_API_KEY` (free build.nvidia.com endpoint, 1M context); optional extra provider `FALLBACK2_*` | Used only when Gemini can't run the pipeline. On our free Mistral account DeepSeek V4.1 Flash shows no tokens-per-minute cap; mistral-small allows 20,000 tokens/minute (mistral-large returns 403 on the free tier), which fits one RFP-sized request a minute. A model that returns 403/404 is skipped for the next. So the backup produces the whole report in a single call instead of the 3 parallel extraction calls, and also serves the small reasoning call if only that step fails. |
 
 Thinking: `low` for extraction (literal work), `medium` for reasoning. Gemini 2.5 models are no longer offered to new API keys; a retired model (HTTP 404) is skipped automatically.
 
@@ -117,7 +125,7 @@ Thinking: `low` for extraction (literal work), `medium` for reasoning. Gemini 2.
 - **1M-token context.** A 100-page RFP (about 100k tokens) fits in one request, so nothing is chunked and nothing is missed.
 - **Native structured output.** `responseSchema` makes the model return JSON in our exact shape, and zod validates it again on the server.
 - **Fast enough.** In v1 live runs the reports took 35–51 s. v2 makes 4 calls (3 in parallel), so expect a similar or slightly longer time; `npm run bench` measures it. When Google's free tier is overloaded it can be slower, so the function is allowed 300 s (the Vercel Hobby limit with Fluid compute). Thinking level `low` gives better judgement on dates and requirements without slowing it down much. (`gemini-2.5-flash` is no longer offered to new API keys, so the code also handles a retired model by moving to the next one.)
-- **Automatic fallback.** If the main model is rate-limited (429), busy (503) or retired (404), it waits briefly and retries once (quota errors skip straight on), then moves down the model list. On the free tier each model has its own quota (AI Studio showed 20 requests/day for each Flash model and 500/day for 3.5 Flash-Lite on our project), so spreading across models keeps the app available. A model that reports its daily quota used up, or that isn't available to the key, is remembered and skipped until the reset instead of being retried. Each attempt is capped at 60 s so an overloaded model can't stall the report. If a model rejects an optional setting (400), it retries once with only the essential settings.
+- **Automatic fallback.** If the main model is rate-limited (429), busy (503) or retired (404), it waits briefly and retries once (quota errors skip straight on), then moves down the model list. On the free tier each model has its own quota (AI Studio showed 20 requests/day for each Flash model and 500/day for 3.5 Flash-Lite on our project), so spreading across models keeps the app available. A model that reports its daily quota used up, or that isn't available to the key, is remembered and skipped until the reset instead of being retried. Each attempt is capped at 45 s and the whole Gemini extraction phase at 100 s (`EXTRACT_BUDGET_MS`), so the backup always has time left within Vercel's 300 s so an overloaded model can't stall the report. If a model rejects an optional setting (400), it retries once with only the essential settings.
 - **Second provider when Gemini is busy.** Google's free tier is often overloaded (HTTP 503) or out of daily quota. If `FALLBACK_API_KEY` is set, the app switches to Mistral's free API (`mistral-small-latest`, OpenAI-compatible, one whole-document call) after one short retry. The report says which provider produced it, and the same schema validation and evidence checks apply. See `lib/openai-compat.ts`.
 - **Alternatives considered.** Groq's free tier is faster, but its tokens-per-minute limit is too low for a 100-page document in one call. GitHub Models has smaller context limits. Self-hosted models need paid GPUs.
 
@@ -201,7 +209,7 @@ npx tsx scripts/dump-pages.ts samples/Sample-RFP-1-Port-Alder-Permit-Automation.
 
 1. Push this folder to a GitHub repository. `.env.local` is git-ignored, so the key never enters the repo.
 2. On <https://vercel.com/new>, import the repo. The framework is detected as Next.js; keep the defaults.
-3. Under **Environment Variables**, add `GEMINI_API_KEY`, plus `FALLBACK_API_KEY` (a free Mistral key from console.mistral.ai) so reviewers still get a report when Gemini is busy. Optional: `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `GEMINI_THINKING_LEVEL`, `RATE_LIMIT_PER_10_MIN`.
+3. Under **Environment Variables**, add `GEMINI_API_KEY`, plus the backups `FALLBACK_API_KEY` (free Mistral key, console.mistral.ai) and `NVIDIA_API_KEY` (free key, build.nvidia.com) so reviewers still get a report when Gemini is busy. Optional: `GEMINI_MODEL`, `GEMINI_FALLBACK_MODELS`, `GEMINI_THINKING_LEVEL`, `RATE_LIMIT_PER_10_MIN`.
 4. Deploy, open the URL and upload a sample RFP.
 
 The API route sets `maxDuration = 300` (the Hobby maximum with Fluid compute, which is on by default for new projects). There's a light per-IP rate limit (12 analyses per 10 minutes per server instance) to protect the free model quota on a public link.

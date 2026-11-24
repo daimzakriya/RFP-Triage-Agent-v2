@@ -213,3 +213,27 @@ describe("backup provider budget", () => {
     expect(r.deadlines.find((d) => d.kind === "proposal_due")?.date).toBe("2027-01-15");
   });
 });
+
+describe("time budget", () => {
+  it("abandons hanging Gemini calls in time for the backup to answer", async () => {
+    const { vi } = await import("vitest");
+    const rfp1Model = (await import("@/fixtures/sample-rfp-1.model.json")).default;
+    process.env.GEMINI_API_KEY = "k";
+    process.env.FALLBACK_API_KEY = "m";
+    process.env.EXTRACT_BUDGET_MS = "200";
+    const fetchMock = vi.fn((url: string, init: RequestInit) =>
+      url.includes("googleapis")
+        ? new Promise<Response>((_, reject) => init.signal!.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }))))
+        : Promise.resolve(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp1Model) } }] }), { status: 200 })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const t0 = Date.now();
+    const r = await analyzeDocument(rfp1, "rfp1.pdf", undefined, "v2");
+    vi.unstubAllGlobals();
+    delete process.env.FALLBACK_API_KEY;
+    delete process.env.EXTRACT_BUDGET_MS;
+    expect(Date.now() - t0).toBeLessThan(10_000);
+    expect(r.degraded).toBeFalsy();
+    expect(r.model.provider).toMatch(/backup, single call/);
+  });
+});

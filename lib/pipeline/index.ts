@@ -43,6 +43,10 @@ async function runWorker(spec: WorkerSpec, pages: string[], pageNumbers: number[
   let lastErr = "";
   // Retry only this task, once, on a provider error or a schema-invalid answer.
   for (let attempt = 1; attempt <= 2; attempt++) {
+    if (signal?.aborted) {
+      lastErr = lastErr || "time budget for extraction used up";
+      break;
+    }
     try {
       const r = await callTask({ task: `extract.${spec.id}`, system: EXTRACTION_SYSTEM, user, schema: spec.schema, models: extractionModels(), thinkingLevel: "low", signal, allowBackup: false });
       results.push(r);
@@ -74,15 +78,28 @@ export async function runPipelineV2(pages: string[], fileName: string, signal?: 
   log("pipeline.start", { fileName, pages: pages.length, estTokens: routing.totalTokens, fullDocument: routing.fullDocument, changeStatements: changes.length });
 
   /* ---------- 1. extraction workers (parallel) ---------- */
-  const runs = await Promise.all(
-    WORKERS.map((w) => runWorker(w, pages, routing.pagesByWorker[w.id], w.task(changes), signal)),
-  );
+  // Hard time budget for the Gemini extraction phase, so that if the free models are
+  // overloaded there is still time left (Vercel allows 300 s) for the backup call.
+  const extractBudget = new AbortController();
+  const budgetTimer = setTimeout(() => extractBudget.abort(), Number(process.env.EXTRACT_BUDGET_MS ?? 100_000));
+  const onOuter = () => extractBudget.abort();
+  signal?.addEventListener("abort", onOuter);
+  let runs: WorkerRun<unknown>[];
+  try {
+    runs = await Promise.all(
+      WORKERS.map((w) => runWorker(w, pages, routing.pagesByWorker[w.id], w.task(changes), extractBudget.signal)),
+    );
+  } finally {
+    clearTimeout(budgetTimer);
+    signal?.removeEventListener("abort", onOuter);
+  }
+  if (signal?.aborted) throw new LlmError("The analysis timed out.", 504);
   const byId = Object.fromEntries(runs.map((r) => [r.id, r])) as Record<WorkerId, WorkerRun<unknown>>;
   const failed = runs.filter((r) => !r.ok);
   if (!byId.schedule.ok || !byId.requirements.ok) {
     // Without dates or requirements there is no honest report to show.
     const why = failed.map((f) => `${f.id}: ${f.error}`).join("; ");
-    const status = failed.some((f) => /quota|429/i.test(f.error ?? "")) ? 429 : 503;
+    const status = failed.every((f) => /quota|429/i.test(f.error ?? "")) ? 429 : 503;
     throw new LlmError(`The analysis could not be completed. Details: ${why}`, status);
   }
   const sched = byId.schedule.data as ScheduleOutT;
@@ -94,7 +111,7 @@ export async function runPipelineV2(pages: string[], fileName: string, signal?: 
     const evs = r.requirements.flatMap((q) => q.evidence.map((e) => verifyEvidence(idx, e)));
     return evs.length ? evs.filter((e) => e.check === "unverified").length / evs.length : 1;
   };
-  if (reqOut.requirements.length === 0 || unverifiedShare(reqOut) > 0.3) {
+  if ((reqOut.requirements.length === 0 || unverifiedShare(reqOut) > 0.3) && Date.now() - started < 120_000) {
     const spec = WORKERS.find((w) => w.id === "requirements")!;
     const again = await runWorker(spec, pages, routing.pagesByWorker.requirements, spec.task(changes), signal,
       "\n\nIMPORTANT: a previous attempt cited quotes that are not in the document. Copy quotes character-for-character from the page text.");

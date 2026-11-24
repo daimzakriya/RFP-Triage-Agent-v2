@@ -62,7 +62,7 @@ export async function callTask(c: TaskCall): Promise<TaskResult> {
     if (!backup || ![429, 502, 503].includes(status)) throw err;
     try {
       const r = await callOpenAICompat(c.system, c.user, c.signal, { schema: c.schema });
-      const res: TaskResult = { ...r, task: c.task, provider: "Mistral (backup)", usage: r.usage ?? ZERO };
+      const res: TaskResult = { ...r, task: c.task, provider: `${r.provider ?? "Backup"} (backup)`, usage: r.usage ?? ZERO };
       log("llm.ok", { task: c.task, provider: res.provider, model: res.model, ms: res.latencyMs, ...res.usage });
       return res;
     } catch (err2) {

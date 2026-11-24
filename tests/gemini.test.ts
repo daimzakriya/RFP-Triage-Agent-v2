@@ -148,7 +148,7 @@ describe("backup provider (mocked network)", () => {
       const body = JSON.parse(init.body as string);
       expect(url).toBe("https://api.mistral.ai/v1/chat/completions");
       expect((init.headers as Record<string, string>).Authorization).toBe("Bearer m");
-      expect(body.model).toBe("mistral-small-latest");
+      expect(["deepseek-v4-1-flash-1017", "mistral-small-latest"]).toContain(body.model);
       expect(body.response_format.type).toBe("json_object");
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp2) }, finish_reason: "stop" }] }), { status: 200 });
     });
@@ -175,6 +175,42 @@ describe("backup provider (mocked network)", () => {
     vi.useRealTimers();
     delete process.env.FALLBACK_API_KEY;
     expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(res.json).toEqual(rfp2);
+  });
+
+  it("moves to the next backup model when one is not available on the free tier (403)", async () => {
+    process.env.FALLBACK_API_KEY = "m";
+    const { callOpenAICompat } = await import("@/lib/openai-compat");
+    const fetchMock = vi.fn(async (_u: string, init: RequestInit) => {
+      const model = JSON.parse(init.body as string).model;
+      return model === "deepseek-v4-1-flash-1017"
+        ? new Response('{"message":"This model is not available in your subscription tier"}', { status: 403 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp2) } }] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await callOpenAICompat("s", "u");
+    delete process.env.FALLBACK_API_KEY;
+    expect(res.model).toBe("mistral-small-latest");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls through to NVIDIA Nemotron when the Mistral models are refused, and reads JSON after a <think> block", async () => {
+    process.env.FALLBACK_API_KEY = "m";
+    process.env.NVIDIA_API_KEY = "n";
+    const { callOpenAICompat } = await import("@/lib/openai-compat");
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.startsWith("https://api.mistral.ai")) return new Response('{"message":"Rate limit exceeded"}', { status: 429 });
+      expect(url).toBe("https://integrate.api.nvidia.com/v1/chat/completions");
+      expect(JSON.parse(init.body as string).model).toBe("nvidia/nemotron-3-super-120b-a12b");
+      return new Response(JSON.stringify({ choices: [{ message: { content: "<think>reading the RFP</think>\n" + JSON.stringify(rfp2) } }] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.FALLBACK_RETRY_BUDGET_MS = "0";
+    const res = await callOpenAICompat("s", "u");
+    delete process.env.FALLBACK_API_KEY;
+    delete process.env.NVIDIA_API_KEY;
+    delete process.env.FALLBACK_RETRY_BUDGET_MS;
+    expect(res.provider).toBe("NVIDIA");
     expect(res.json).toEqual(rfp2);
   });
 

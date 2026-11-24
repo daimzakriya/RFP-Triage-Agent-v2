@@ -227,7 +227,7 @@ export async function callGemini(
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const BUDGET_MS = Number(process.env.GEMINI_RETRY_BUDGET_MS ?? 60_000); // total time we may spend waiting on busy models (function limit is 300 s)
   // An overloaded model can take minutes; cap each attempt so we can fall back in time.
-  const ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS ?? 60_000);
+  const ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS ?? 45_000);
 
   for (const model of opts.models?.length ? opts.models : defaultModels()) {
     const known = unavailableUntil.get(model);
@@ -243,6 +243,10 @@ export async function callGemini(
       const attempt = new AbortController();
       const timer = setTimeout(() => attempt.abort(), ATTEMPT_MS);
       const onOuterAbort = () => attempt.abort();
+      if (signal?.aborted) {
+        clearTimeout(timer);
+        throw new LlmError("The analysis timed out.", 504);
+      }
       signal?.addEventListener("abort", onOuterAbort);
       let res: Response;
       let data: any;
