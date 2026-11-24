@@ -56,7 +56,10 @@ export async function callOpenAICompat(
 
   // Plain JSON mode is supported by every OpenAI-compatible provider; the schema is spelled out in the
   // prompt and zod validates the answer. Free tiers allow ~1 request/second, so on 429 we wait and retry.
-  const waits = [2_000, 5_000, 10_000];
+  // Per-minute token windows need longer waits than per-second ones; honour Retry-After when given.
+  const waits = [5_000, 15_000, 25_000];
+  const budgetMs = Number(process.env.FALLBACK_RETRY_BUDGET_MS ?? 60_000);
+  const startedAll = Date.now();
   const problems: string[] = [];
   for (let attempt = 0; attempt <= waits.length; attempt++) {
     const started = Date.now();
@@ -69,7 +72,7 @@ export async function callOpenAICompat(
         body: JSON.stringify({
           model,
           temperature: 0,
-          max_tokens: 12000,
+          max_tokens: Number(process.env.FALLBACK_MAX_TOKENS ?? 8000),
           response_format: { type: "json_object" },
           messages: [
             {
@@ -85,9 +88,13 @@ export async function callOpenAICompat(
       throw new LlmError(`Could not reach the backup model (${(err as Error).message}).`, 503);
     }
     if ((res.status === 429 || res.status >= 500) && attempt < waits.length) {
-      problems.push(`${model}: HTTP ${res.status}, retrying`);
-      await new Promise((r) => setTimeout(r, waits[attempt]));
-      continue;
+      const retryAfter = Number(res.headers.get("retry-after"));
+      const wait = Math.min(60_000, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : waits[attempt]);
+      if (Date.now() - startedAll + wait < budgetMs) {
+        problems.push(`${model}: HTTP ${res.status}, retrying in ${Math.round(wait / 1000)} s`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
     }
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -99,7 +106,7 @@ export async function callOpenAICompat(
         /* keep text */
       }
       throw new LlmError(
-        `Backup model ${model}: HTTP ${res.status} (${String(typeof msg === "string" ? msg : JSON.stringify(msg)).slice(0, 200)})`,
+        `Backup model ${model}: HTTP ${res.status} (${String(typeof msg === "string" ? msg : JSON.stringify(msg)).slice(0, 200)})${problems.length ? ` after ${problems.length} retr${problems.length === 1 ? "y" : "ies"}` : ""}`,
         res.status === 429 ? 429 : res.status === 401 || res.status === 403 ? 502 : 503,
       );
     }

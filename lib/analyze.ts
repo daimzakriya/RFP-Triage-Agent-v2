@@ -1,6 +1,7 @@
 import { callGemini, LlmError, type LlmResult } from "./gemini";
 import { callOpenAICompat, fallbackConfigured } from "./openai-compat";
 import { runPipelineV2 } from "./pipeline";
+import { buildOfflineReport } from "./pipeline/offline";
 import { systemPrompt, userPrompt } from "./prompt";
 import { ModelOutputSchema, type FactKey, type ModelOutput, type ReviewFlag, type TriageReport } from "./schema";
 import { decide, scoreFactors } from "./score";
@@ -112,9 +113,18 @@ export async function analyzeDocument(
   signal?: AbortSignal,
   pipeline: PipelineVersion = defaultPipeline(),
 ): Promise<TriageReport> {
-  if (pipeline === "v2") return runPipelineV2(pages, fileName, signal);
-  const report = await analyzeDocumentV1(pages, fileName, signal);
-  return { ...report, pipeline: "v1" };
+  try {
+    if (pipeline === "v2") return await runPipelineV2(pages, fileName, signal);
+    const report = await analyzeDocumentV1(pages, fileName, signal);
+    return { ...report, pipeline: "v1" };
+  } catch (err) {
+    // Every AI provider busy or out of quota: never show a bare error. Return an honest
+    // text-search report (dates, addenda, requirement sentences, no recommendation).
+    if (err instanceof LlmError && [429, 502, 503, 504].includes(err.status) && process.env.DISABLE_DEGRADED_MODE !== "1") {
+      return buildOfflineReport(pages, fileName, err.message);
+    }
+    throw err;
+  }
 }
 
 async function analyzeDocumentV1(pages: string[], fileName: string, signal?: AbortSignal): Promise<TriageReport> {

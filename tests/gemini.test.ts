@@ -156,7 +156,7 @@ describe("backup provider (mocked network)", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp2) } }] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const p = callOpenAICompat("s", "u");
-    await vi.advanceTimersByTimeAsync(6_000);
+    await vi.advanceTimersByTimeAsync(8_000);
     const res = await p;
     vi.useRealTimers();
     delete process.env.FALLBACK_API_KEY;

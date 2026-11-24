@@ -17,8 +17,10 @@ const STAGES: { id: Stage; label: string }[] = [
   { id: "checking", label: "Checking quotes against the document and scoring fit" },
 ];
 
+type QueueItem = { kind: "file"; file: File } | { kind: "retry"; name: string; pages: string[]; replaceId: string };
+
 interface Job {
-  file: File;
+  name: string;
   stage: Stage;
   startedAt: number;
 }
@@ -39,7 +41,7 @@ function slug(r: TriageReport) {
 export default function Home() {
   const [desk, setDesk] = useState<DeskItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [queue, setQueue] = useState<File[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
   const [job, setJob] = useState<Job | null>(null);
   const [errors, setErrors] = useState<{ file: string; message: string }[]>([]);
   const [tab, setTab] = useState<"report" | "json">("report");
@@ -66,44 +68,59 @@ export default function Home() {
     return () => clearInterval(t);
   }, [job]);
 
-  const runOne = useCallback(async (file: File) => {
+  const runOne = useCallback(async (q: QueueItem) => {
     const startedAt = Date.now();
+    const name = q.kind === "file" ? q.file.name : q.name;
     setElapsed(0);
-    setJob({ file, stage: "reading", startedAt });
+    setJob({ name, stage: q.kind === "file" ? "reading" : "analysing", startedAt });
     try {
-      if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
-        throw new PdfInputError("Only PDF files are supported.", "not_pdf");
-      }
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const { pages, characters } = await extractPdfPages(bytes);
-      if (characters > LIMITS.maxChars) {
-        throw new PdfInputError(`This PDF has ${characters.toLocaleString()} characters of text. The limit is ${LIMITS.maxChars.toLocaleString()}.`, "too_large");
+      let pages: string[];
+      if (q.kind === "file") {
+        const file = q.file;
+        if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+          throw new PdfInputError("Only PDF files are supported.", "not_pdf");
+        }
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const extracted = await extractPdfPages(bytes);
+        if (extracted.characters > LIMITS.maxChars) {
+          throw new PdfInputError(`This PDF has ${extracted.characters.toLocaleString()} characters of text. The limit is ${LIMITS.maxChars.toLocaleString()}.`, "too_large");
+        }
+        pages = extracted.pages;
+      } else {
+        pages = q.pages; // retry: reuse the text already read from the PDF
       }
 
-      setJob({ file, stage: "analysing", startedAt });
+      setJob({ name, stage: "analysing", startedAt });
       const checkingTimer = setTimeout(() => setJob((j) => (j ? { ...j, stage: "checking" } : j)), 25_000);
       let res: Response;
       try {
         res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName: file.name, pages }),
+          body: JSON.stringify({ fileName: name, pages }),
         });
       } finally {
         clearTimeout(checkingTimer);
       }
       const data = await res.json().catch(() => ({ error: `Server error (HTTP ${res.status}).` }));
       if (!res.ok) throw new Error(data.error || `Server error (HTTP ${res.status}).`);
-      setJob({ file, stage: "checking", startedAt });
+      setJob({ name, stage: "checking", startedAt });
 
       const item: DeskItem = { id: crypto.randomUUID(), addedAt: new Date().toISOString(), report: data as TriageReport, pages };
-      setDesk((d) => [item, ...d.filter((x) => !(x.report.document.fileName === file.name && x.report.solicitation_number === item.report.solicitation_number))]);
+      setDesk((d) => [
+        item,
+        ...d.filter(
+          (x) =>
+            !(q.kind === "retry" && x.id === q.replaceId) &&
+            !(x.report.document.fileName === name && x.report.solicitation_number === item.report.solicitation_number),
+        ),
+      ]);
       setSelectedId(item.id);
       setTab("report");
       setTimeout(() => reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setErrors((e) => [...e, { file: file.name, message }]);
+      setErrors((e) => [...e, { file: name, message }]);
     } finally {
       setJob(null);
     }
@@ -121,7 +138,7 @@ export default function Home() {
     if (!list?.length) return;
     const files = Array.from(list); // copy now: the FileList is live and is cleared when the input resets
     setErrors([]);
-    setQueue((q) => [...q, ...files]);
+    setQueue((q) => [...q, ...files.map((file) => ({ kind: "file" as const, file }))]);
   }
 
   const selected = desk.find((d) => d.id === selectedId) ?? null;
@@ -188,7 +205,7 @@ export default function Home() {
               {job && (
                 <div className="card">
                   <div className="card-head" style={{ marginBottom: 0 }}>
-                    <strong>{job.file.name}</strong>
+                    <strong>{job.name}</strong>
                     <span className="days">{elapsed}s</span>
                   </div>
                   <ol className="steps">
@@ -216,7 +233,7 @@ export default function Home() {
                 <ul className="queue" aria-label="Waiting to be analysed">
                   {queue.map((f, i) => (
                     <li key={i}>
-                      <span>{f.name}</span>
+                      <span>{f.kind === "file" ? f.file.name : `${f.name} (retry)`}</span>
                       <span className="muted">queued</span>
                     </li>
                   ))}
@@ -278,6 +295,12 @@ export default function Home() {
               {tab === "report" ? (
                 <Report
                   report={selected.report}
+                  retrying={!!job || queue.some((q) => q.kind === "retry" && q.replaceId === selected.id)}
+                  onRetry={
+                    selected.pages
+                      ? () => setQueue((q) => [...q, { kind: "retry", name: selected.report.document.fileName, pages: selected.pages!, replaceId: selected.id }])
+                      : undefined
+                  }
                   onDownloadIcs={() => download(`${slug(selected.report)}-deadlines.ics`, reportsToIcs([selected.report]), "text/calendar")}
                 />
               ) : (

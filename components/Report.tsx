@@ -55,7 +55,17 @@ function StatusChip({ status, needsReview }: { status: string; needsReview?: boo
   return null;
 }
 
-export function Report({ report, onDownloadIcs }: { report: TriageReport; onDownloadIcs: () => void }) {
+export function Report({
+  report,
+  onDownloadIcs,
+  onRetry,
+  retrying,
+}: {
+  report: TriageReport;
+  onDownloadIcs: () => void;
+  onRetry?: () => void;
+  retrying?: boolean;
+}) {
   const r = report;
   const bid = r.decision === "BID";
   const [copied, setCopied] = useState(false);
@@ -82,23 +92,45 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
       {/* ---------- decision ---------- */}
       <section className="card" aria-labelledby="decision-h">
         <div className="hero">
-          <div className={`verdict ${bid ? "bid" : "nobid"}`}>
+          <div className={`verdict ${r.degraded ? "pending" : bid ? "bid" : "nobid"}`}>
             <div className="label" style={{ color: "inherit" }}>Recommendation</div>
-            <div className="word" id="decision-h">{bid ? "BID" : "NO BID"}</div>
-            <div className="score">
-              <b>{r.fit_score}</b> / 10 fit
-            </div>
-            <div className="gauge" aria-hidden="true">
-              <span style={{ width: `${r.fit_score * 10}%` }} />
-            </div>
+            <div className="word" id="decision-h">{r.degraded ? "NO CALL YET" : bid ? "BID" : "NO BID"}</div>
+            {r.degraded ? (
+              <>
+                <p className="small" style={{ margin: "0 0 10px", color: "var(--ink-2)" }}>
+                  The free AI models were busy, so this is a text-search report without a fit score.
+                </p>
+                {onRetry && (
+                  <button className="btn btn-primary btn-sm no-print" onClick={onRetry} disabled={retrying}>
+                    {retrying ? "Retrying…" : "↻ Retry full analysis"}
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="score">
+                  <b>{r.fit_score}</b> / 10 fit
+                </div>
+                <div className="gauge" aria-hidden="true">
+                  <span style={{ width: `${r.fit_score * 10}%` }} />
+                </div>
+              </>
+            )}
             {r.fastNoBid && <div style={{ marginTop: 10 }}><span className="chip chip-nobid">⚡ fast no-bid</span></div>}
           </div>
           <div>
-            <div className="label">{r.solicitation_number || "No solicitation number"} · {r.facts.agency.value}</div>
+            <div className="label">
+              {r.solicitation_number || "No solicitation number"}
+              {r.facts.agency.status !== "not_stated" && <> · {r.facts.agency.value}</>}
+            </div>
             <h2 style={{ marginTop: 4 }}>{r.title}</h2>
             {r.decisionNote && <div className="alert alert-info" style={{ margin: "10px 0" }}>{r.decisionNote}</div>}
-            <h3 style={{ marginTop: 14 }}>Three strongest reasons</h3>
-            <ol className="reasons">{r.reasons.map((x, i) => <li key={i}>{x}</li>)}</ol>
+            {r.reasons.length > 0 && (
+              <>
+                <h3 style={{ marginTop: 14 }}>Three strongest reasons</h3>
+                <ol className="reasons">{r.reasons.map((x, i) => <li key={i}>{x}</li>)}</ol>
+              </>
+            )}
             {r.change_mind.length > 0 && (
               <>
                 <h3 style={{ marginTop: 12 }}>What would change our mind</h3>
@@ -275,6 +307,7 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
           )}
 
           {/* ---------- fit ---------- */}
+          {!r.degraded && (
           <section className="card" aria-labelledby="fit-h">
             <div className="card-head">
               <div className="label"><span className="num">04</span>Fit score</div>
@@ -293,6 +326,7 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
               BID needs at least 6/10, no blocking deal-breaker, and agreement from the model's judgement.
             </p>
           </section>
+          )}
 
           {/* ---------- evaluation & submission ---------- */}
           {(r.evaluation_criteria || r.submission_items) && (
@@ -360,7 +394,7 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
             <div className="label"><span className="num">05</span>Deal-breakers</div>
             <h2 id="db-h" className="sr-only">Deal-breakers</h2>
             {r.deal_breakers.length === 0 ? (
-              <p className="small muted">None found.</p>
+              <p className="small muted">{r.degraded ? "Needs the AI assessment. Use Retry." : "None found."}</p>
             ) : (
               <ul className="req-list">
                 {r.deal_breakers.map((d, i) => (
@@ -383,7 +417,7 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
               )}
             </div>
             {r.open_questions.length === 0 ? (
-              <p className="small muted">None.</p>
+              <p className="small muted">{r.degraded ? "Needs the AI assessment." : "None."}</p>
             ) : (
               <ol className="reasons small">{r.open_questions.map((q, i) => <li key={i}>{q}</li>)}</ol>
             )}

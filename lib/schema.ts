@@ -188,9 +188,11 @@ export interface TriageReport {
   };
   model: { provider: string; name: string; latencyMs: number };
 
-  decision: "BID" | "NO_BID";
+  decision: "BID" | "NO_BID" | "UNDETERMINED"; // UNDETERMINED only in degraded (no-AI) reports
   fastNoBid: boolean;
-  modelRecommendation: "BID" | "NO_BID";
+  modelRecommendation: "BID" | "NO_BID" | "UNDETERMINED";
+  degraded?: boolean; // true when every AI provider was unavailable and the report is text-search only
+  degradedReason?: string;
   decisionNote: string | null;
 
   fit_score: number; // 0-10

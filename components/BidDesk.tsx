@@ -71,8 +71,10 @@ export function BidDesk({
                         <div className="small muted">{r.solicitation_number}</div>
                       </td>
                       <td>
-                        <span className={`chip ${r.decision === "BID" ? "chip-bid" : "chip-nobid"}`}>{r.decision === "BID" ? "BID" : "NO BID"}</span>
-                        <div className="days" style={{ marginTop: 4 }}>{r.fit_score}/10</div>
+                        <span className={`chip ${r.decision === "BID" ? "chip-bid" : r.decision === "NO_BID" ? "chip-nobid" : "chip-neutral"}`}>
+                          {r.decision === "BID" ? "BID" : r.decision === "NO_BID" ? "NO BID" : "NO CALL"}
+                        </span>
+                        <div className="days" style={{ marginTop: 4 }}>{r.degraded ? "AI pending" : `${r.fit_score}/10`}</div>
                       </td>
                       <td>
                         {due ? (

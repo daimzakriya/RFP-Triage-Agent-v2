@@ -140,9 +140,13 @@ describe("v2 pipeline end to end (recorded answers)", () => {
     expect(calls.filter((t) => t === "extract.schedule")).toHaveLength(1);
     expect(r.evaluation_criteria).toHaveLength(7);
   });
-  it("refuses to present a report when requirements could not be extracted", async () => {
+  it("never presents a partial AI report as complete when requirements could not be extracted", async () => {
     setFixtureProvider((task, user) => (task === "extract.requirements" ? { nope: true } : v2Fixture(task, user)));
-    await expect(analyzeDocument(rfp1, "rfp1.pdf", undefined, "v2")).rejects.toThrow(/could not be completed/);
+    const r = await analyzeDocument(rfp1, "rfp1.pdf", undefined, "v2");
+    expect(r.degraded).toBe(true);
+    expect(r.decision).toBe("UNDETERMINED");
+    expect(r.quality?.status).toBe("incomplete");
+    expect(r.degradedReason).toMatch(/requirements: schema/);
   });
   it("flags invented requirements (quotes not in the PDF) instead of hiding them", async () => {
     setFixtureProvider((task, user) => {
@@ -155,5 +159,31 @@ describe("v2 pipeline end to end (recorded answers)", () => {
     expect(fake.needsReview).toBe(true);
     expect(r.quality?.checks.find((c) => c.id === "unsupported")?.status).toBe("warn");
     expect(r.quality?.status).not.toBe("verified");
+  });
+});
+
+describe("degraded mode (every AI provider unavailable)", () => {
+  it("returns an honest text-search report instead of an error", async () => {
+    const { vi } = await import("vitest");
+    process.env.GEMINI_API_KEY = "k";
+    process.env.GEMINI_RETRY_BUDGET_MS = "0";
+    delete process.env.FALLBACK_API_KEY;
+    vi.stubGlobal("fetch", vi.fn(async () => new Response('{"error":{"message":"This model is currently experiencing high demand."}}', { status: 503 })));
+    const r = await analyzeDocument(rfp1, "rfp1.pdf", undefined, "v2");
+    vi.unstubAllGlobals();
+    delete process.env.GEMINI_RETRY_BUDGET_MS;
+    expect(r.degraded).toBe(true);
+    expect(r.decision).toBe("UNDETERMINED");
+    expect(r.quality?.status).toBe("incomplete");
+    expect(r.deadlines.find((d) => d.kind === "proposal_due")).toMatchObject({ date: "2027-01-15", original_date: "2027-01-08" });
+    expect(r.deadlines.find((d) => d.kind === "questions_due")?.date).toBe("2026-12-11");
+    expect(r.evidence_stats.unverified).toBe(0);
+    expect(r.title).toBe("AI-Assisted Permit Intake and Review Automation Platform");
+  });
+  it("still finds a mandatory site walk without AI", async () => {
+    const { buildOfflineReport } = await import("@/lib/pipeline/offline");
+    const r = buildOfflineReport(rfp2, "rfp2.pdf", "test");
+    expect(r.deadlines.find((d) => d.kind === "site_visit")).toMatchObject({ date: "2026-12-03", mandatory: true });
+    expect(r.decisionNote).toMatch(/outside idiaz.io's services/);
   });
 });

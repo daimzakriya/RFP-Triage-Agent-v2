@@ -84,6 +84,15 @@ Report ◄── TriageReport JSON ────────   mandatory items, d
 3. **The score could contradict the evidence.** The same call that extracted requirements also scored eligibility, giving 9/10 for Port Alder while minimum qualifications (3 years, two public-sector projects, insurance) were still unconfirmed.
 4. **No measurement.** There was no token logging and no saved output, so quality changes couldn't be compared.
 
+**When every AI model is unavailable.** Free tiers fail in two ways: a daily quota runs out (429), or Google's servers are overloaded (503). If Gemini and the Mistral backup both refuse, the app does not show an error. It returns a **text-search report** (`lib/pipeline/offline.ts`), labelled "NO CALL YET" and marked `degraded: true` and quality `incomplete`. It contains:
+
+- every dated deadline found by keyword, with page and quote, and addendum changes applied
+- requirement sentences
+- coverage warnings
+- a keyword screen for obviously non-software work
+
+It has no fit score and no recommendation; it never guesses. "Retry full analysis" re-runs the AI pipeline using the already-read PDF text. On both samples this mode still gets every key date right, including the revised proposal date and the mandatory site walk. Set `DISABLE_DEGRADED_MODE=1` to show the raw error instead.
+
 **Retention between stages.** Workers return validated structured data. The reasoning step receives every requirement (ID, category, mandatory flag, exact text and values, pages, whether its quote was verified), every date with original/revised values, the addenda, criteria and terms. Its compliance judgements are mapped back onto the original requirements by ID, so evidence never passes through a model a second time.
 
 **Addenda.** The scanner finds sentences with a change verb and two dates (`extended from January 8, 2027 to January 15, 2027`) and the addendum label before them. A date counts as superseded only when such a statement exists. If the model reports the old date, it is corrected and flagged. If the model claims a revision with no supporting statement, the claim is flagged for human verification. A later date elsewhere in the PDF is never treated as a revision.
@@ -175,7 +184,7 @@ Get a key at <https://aistudio.google.com/app/apikey> (free, no card).
 Useful scripts:
 
 ```bash
-npm test                     # 50 unit tests: PDF reading, quote/date checks, addendum scanner, dedupe,
+npm test                     # 52 unit tests: PDF reading, quote/date checks, addendum scanner, dedupe,
                              # scoring caps, worker retry, hallucination flagging, clients (mocked)
 npm run bench                # live: v1 (baseline) vs v2 on both samples, saves reports + summary.md
 npm run bench -- --samples=1 # Port Alder only (fewer requests)

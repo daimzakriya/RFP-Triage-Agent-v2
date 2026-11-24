@@ -42,7 +42,7 @@ export function rankDesk(items: DeskItem[], today = new Date()): DeskItem[] {
     const due = proposalDue(it.report, today);
     const expired = due ? due.days < 0 : false;
     return {
-      group: expired ? 2 : it.report.decision === "BID" ? 0 : 1,
+      group: expired ? 3 : it.report.decision === "BID" ? 0 : it.report.decision === "UNDETERMINED" ? 1 : 2,
       fit: -it.report.fit_score,
       due: due ? due.days : 9999,
     };
