@@ -114,7 +114,20 @@ export async function analyzeDocument(
   pipeline: PipelineVersion = defaultPipeline(),
 ): Promise<TriageReport> {
   try {
-    if (pipeline === "v2") return await runPipelineV2(pages, fileName, signal);
+    if (pipeline === "v2") {
+      try {
+        return await runPipelineV2(pages, fileName, signal);
+      } catch (err) {
+        // Gemini unavailable for the multi-call pipeline. The free backup provider only fits
+        // ~one RFP-sized request a minute, so ask it for the whole report in ONE call.
+        if (!(err instanceof LlmError) || ![429, 502, 503, 504].includes(err.status) || !fallbackConfigured()) throw err;
+        try {
+          return await analyzeWithBackupOnly(pages, fileName, signal, err.message);
+        } catch (err2) {
+          throw new LlmError(`${err.message} Backup single call also failed: ${(err2 as Error).message}`, err2 instanceof LlmError ? err2.status : 503);
+        }
+      }
+    }
     const report = await analyzeDocumentV1(pages, fileName, signal);
     return { ...report, pipeline: "v1" };
   } catch (err) {
@@ -125,6 +138,25 @@ export async function analyzeDocument(
     }
     throw err;
   }
+}
+
+/** One whole-document call to the backup provider (used when Gemini can't run the v2 pipeline). */
+async function analyzeWithBackupOnly(pages: string[], fileName: string, signal: AbortSignal | undefined, why: string): Promise<TriageReport> {
+  const t0 = Date.now();
+  const res = await callOpenAICompat(systemPrompt(), userPrompt(pages), signal);
+  const report = buildReport({ pages, fileName, modelJson: res.json, model: { provider: "Mistral (backup, single call)", name: res.model, latencyMs: res.latencyMs } });
+  const u = res.usage ?? { input: 0, output: 0, thinking: 0, cached: 0 };
+  report.review_flags.unshift({
+    level: "info",
+    field: "model",
+    message: "Gemini was busy, so this report came from the backup model in a single call (no separate reasoning step). Use Retry later for the full multi-stage analysis.",
+  });
+  return {
+    ...report,
+    pipeline: "v1",
+    usage: { calls: 1, ...u, ms: Date.now() - t0, byTask: [{ task: "backup.single", model: res.model, provider: "Mistral", ms: res.latencyMs, ...u }] },
+    decisionNote: [report.decisionNote, `Backup used because: ${why.split(" Details:")[0]}`].filter(Boolean).join(" "),
+  };
 }
 
 async function analyzeDocumentV1(pages: string[], fileName: string, signal?: AbortSignal): Promise<TriageReport> {

@@ -14,6 +14,9 @@ export interface TaskCall {
   models: string[];
   thinkingLevel?: "low" | "medium" | "high";
   signal?: AbortSignal;
+  /** Use the backup provider if every Gemini model fails. Off for the parallel extraction calls:
+   *  the free backup allows ~20k tokens/minute, so the whole-document single call is the backup instead. */
+  allowBackup?: boolean;
 }
 
 export interface TaskResult extends LlmResult {
@@ -42,7 +45,7 @@ export async function callTask(c: TaskCall): Promise<TaskResult> {
     if (json != null) return { task: c.task, json, model: "fixture", provider: "Fixture (offline test mode)", latencyMs: 0, usage: ZERO };
   }
 
-  const backup = fallbackConfigured();
+  const backup = fallbackConfigured() && c.allowBackup !== false;
   try {
     const r = await callGemini(c.system, c.user, c.signal, {
       quick: backup,

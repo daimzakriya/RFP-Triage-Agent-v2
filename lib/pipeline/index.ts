@@ -44,7 +44,7 @@ async function runWorker(spec: WorkerSpec, pages: string[], pageNumbers: number[
   // Retry only this task, once, on a provider error or a schema-invalid answer.
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const r = await callTask({ task: `extract.${spec.id}`, system: EXTRACTION_SYSTEM, user, schema: spec.schema, models: extractionModels(), thinkingLevel: "low", signal });
+      const r = await callTask({ task: `extract.${spec.id}`, system: EXTRACTION_SYSTEM, user, schema: spec.schema, models: extractionModels(), thinkingLevel: "low", signal, allowBackup: false });
       results.push(r);
       const parsed = spec.validate.safeParse(r.json);
       if (parsed.success) return { id: spec.id, ok: true, data: parsed.data, attempts: attempt, results };

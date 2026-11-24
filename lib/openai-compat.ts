@@ -4,8 +4,10 @@
  *
  *   FALLBACK_API_KEY   required to enable it (e.g. a Mistral key from console.mistral.ai)
  *   FALLBACK_BASE_URL  default https://api.mistral.ai/v1
- *   FALLBACK_MODEL     default mistral-large-2512 (Mistral free tier: 250,000 tokens/min,
- *                      vs 20,000 for mistral-small, which is too little for 3 RFP-sized calls a minute)
+ *   FALLBACK_MODEL     default mistral-small-latest (the model the Mistral free tier serves;
+ *                      mistral-large returns 403 "not available in your subscription tier").
+ *                      Its 20,000 tokens/minute fits ONE RFP-sized call a minute, so the app
+ *                      uses the backup for a single whole-document call, not parallel workers.
  */
 import { GEMINI_RESPONSE_SCHEMA, LlmError, type LlmResult } from "./gemini";
 
@@ -52,7 +54,7 @@ export async function callOpenAICompat(
   const key = process.env.FALLBACK_API_KEY || process.env.MISTRAL_API_KEY;
   if (!key) throw new LlmError("No backup model is configured.", 503);
   const base = (process.env.FALLBACK_BASE_URL || "https://api.mistral.ai/v1").replace(/\/$/, "");
-  const model = process.env.FALLBACK_MODEL || "mistral-large-2512";
+  const model = process.env.FALLBACK_MODEL || "mistral-small-latest";
   const schema = toJsonSchema(opts.schema ?? GEMINI_RESPONSE_SCHEMA);
 
   // Plain JSON mode is supported by every OpenAI-compatible provider; the schema is spelled out in the

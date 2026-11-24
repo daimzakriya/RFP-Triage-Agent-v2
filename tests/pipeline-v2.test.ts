@@ -187,3 +187,29 @@ describe("degraded mode (every AI provider unavailable)", () => {
     expect(r.decisionNote).toMatch(/outside idiaz.io's services/);
   });
 });
+
+describe("backup provider budget", () => {
+  it("sends the backup ONE whole-document request when Gemini can't run the pipeline", async () => {
+    const { vi } = await import("vitest");
+    const rfp1Model = (await import("@/fixtures/sample-rfp-1.model.json")).default;
+    process.env.GEMINI_API_KEY = "k";
+    process.env.FALLBACK_API_KEY = "m";
+    process.env.GEMINI_RETRY_BUDGET_MS = "0";
+    const fetchMock = vi.fn(async (url: string) =>
+      url.includes("googleapis")
+        ? new Response('{"error":{"message":"This model is currently experiencing high demand."}}', { status: 503 })
+        : new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp1Model) } }] }), { status: 200 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const r = await analyzeDocument(rfp1, "rfp1.pdf", undefined, "v2");
+    vi.unstubAllGlobals();
+    delete process.env.FALLBACK_API_KEY;
+    delete process.env.GEMINI_RETRY_BUDGET_MS;
+    const backupCalls = fetchMock.mock.calls.filter(([u]) => !String(u).includes("googleapis")).length;
+    expect(backupCalls).toBe(1);
+    expect(r.degraded).toBeFalsy();
+    expect(r.decision).toBe("BID");
+    expect(r.model.provider).toMatch(/backup, single call/);
+    expect(r.deadlines.find((d) => d.kind === "proposal_due")?.date).toBe("2027-01-15");
+  });
+});
