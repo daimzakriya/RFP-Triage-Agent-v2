@@ -17,6 +17,9 @@ export interface TaskCall {
   /** Use the backup provider if every Gemini model fails. Off for the parallel extraction calls:
    *  the free backup allows ~20k tokens/minute, so the whole-document single call is the backup instead. */
   allowBackup?: boolean;
+  /** See GeminiCallOptions: same-model retry waits and per-model time limit. */
+  busyWaits?: number[];
+  attemptMs?: number;
 }
 
 export interface TaskResult extends LlmResult {
@@ -52,6 +55,8 @@ export async function callTask(c: TaskCall): Promise<TaskResult> {
       schema: c.schema,
       models: c.models,
       thinkingLevel: c.thinkingLevel,
+      busyWaits: c.busyWaits,
+      attemptMs: c.attemptMs,
     });
     const res: TaskResult = { ...r, task: c.task, provider: "Google Gemini", usage: r.usage ?? ZERO };
     log("llm.ok", { task: c.task, provider: res.provider, model: res.model, ms: res.latencyMs, ...res.usage });

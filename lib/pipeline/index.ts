@@ -48,7 +48,10 @@ async function runWorker(spec: WorkerSpec, pages: string[], pageNumbers: number[
       break;
     }
     try {
-      const r = await callTask({ task: `extract.${spec.id}`, system: EXTRACTION_SYSTEM, user, schema: spec.schema, models: extractionModels(), thinkingLevel: "low", signal, allowBackup: false });
+      const r = await callTask({ task: `extract.${spec.id}`, system: EXTRACTION_SYSTEM, user, schema: spec.schema, models: extractionModels(), thinkingLevel: "low", signal, allowBackup: false,
+        // Speed: extraction calls take 5–20 s. If a model is busy, switch to the next one at once
+        // (each model has separate capacity) instead of waiting to retry the same one.
+        busyWaits: [], attemptMs: Number(process.env.EXTRACT_ATTEMPT_MS ?? 30_000) });
       results.push(r);
       const parsed = spec.validate.safeParse(r.json);
       if (parsed.success) return { id: spec.id, ok: true, data: parsed.data, attempts: attempt, results };
@@ -179,7 +182,8 @@ export async function runPipelineV2(pages: string[], fileName: string, signal?: 
   let reasonError = "";
   for (let attempt = 1; attempt <= 2 && !reason; attempt++) {
     try {
-      const r = await callTask({ task: "reason", system: reasonSystem(), user: reasonUser(dataset), schema: REASON_SCHEMA, models: reasoningModels(), thinkingLevel: "medium", signal });
+      const r = await callTask({ task: "reason", system: reasonSystem(), user: reasonUser(dataset), schema: REASON_SCHEMA, models: reasoningModels(), thinkingLevel: "medium", signal,
+        busyWaits: [2_000], attemptMs: Number(process.env.REASON_ATTEMPT_MS ?? 40_000) });
       reasonResults.push(r);
       const p = ReasonOut.safeParse(r.json);
       if (p.success) reason = p.data;

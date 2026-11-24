@@ -151,6 +151,10 @@ export interface GeminiCallOptions {
   schema?: object; // response schema; defaults to the full single-call report schema
   models?: string[]; // model order for this call; defaults to GEMINI_MODEL + GEMINI_FALLBACK_MODELS
   thinkingLevel?: "low" | "medium" | "high";
+  /** Waits before retrying the SAME model when it is busy. [] = move to the next model at once. */
+  busyWaits?: number[];
+  /** Give up on one model after this long and try the next one. */
+  attemptMs?: number;
 }
 
 /**
@@ -170,6 +174,23 @@ export function markUnavailable(model: string, why: string, until: number) {
 }
 export function resetModelMemory() {
   unavailableUntil.clear();
+  busyUntil.clear();
+}
+
+/**
+ * Short memory of models that were just overloaded (503 or no answer in time). They are not
+ * skipped, only tried last for the next ~90 s, so parallel and later calls go straight to a
+ * model that is answering instead of each waiting on the same busy one.
+ */
+const busyUntil = new Map<string, number>();
+const BUSY_MEMORY_MS = 90_000;
+export function markBusy(model: string, now = Date.now()) {
+  busyUntil.set(model, now + BUSY_MEMORY_MS);
+}
+export function orderByAvailability(models: string[], now = Date.now()): string[] {
+  const free = models.filter((m) => !((busyUntil.get(m) ?? 0) > now));
+  const busy = models.filter((m) => (busyUntil.get(m) ?? 0) > now);
+  return [...free, ...busy];
 }
 
 export function defaultModels(): string[] {
@@ -227,9 +248,9 @@ export async function callGemini(
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const BUDGET_MS = Number(process.env.GEMINI_RETRY_BUDGET_MS ?? 60_000); // total time we may spend waiting on busy models (function limit is 300 s)
   // An overloaded model can take minutes; cap each attempt so we can fall back in time.
-  const ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS ?? 45_000);
+  const ATTEMPT_MS = opts.attemptMs ?? Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS ?? 45_000);
 
-  for (const model of opts.models?.length ? opts.models : defaultModels()) {
+  for (const model of orderByAvailability(opts.models?.length ? opts.models : defaultModels())) {
     const known = unavailableUntil.get(model);
     if (known && known.until > Date.now()) {
       attempts.push(`${model}: skipped (${known.why})`);
@@ -272,6 +293,7 @@ export async function callGemini(
             : `${model}: network error (${(err as Error).message})`,
         );
         lastStatus = 503;
+        if ((err as Error).name === "AbortError") markBusy(model);
         break; // next model
       }
       clearTimeout(timer);
@@ -287,7 +309,8 @@ export async function callGemini(
         }
         // Overloaded: wait briefly and retry once. Quota used up (429): retrying only wastes requests, so fall back now.
         // With a backup provider configured, don't spend long waiting on a busy Gemini.
-        const waits = opts.quick ? [2_000] : [3_000, 8_000, 15_000];
+        if (res.status !== 429) markBusy(model);
+        const waits = opts.busyWaits ?? (opts.quick ? [2_000] : [3_000, 8_000, 15_000]);
         if (res.status !== 429 && busyRetries < waits.length && Date.now() - startedAll + waits[busyRetries] < BUDGET_MS) {
           await sleep(waits[busyRetries]);
           busyRetries++;

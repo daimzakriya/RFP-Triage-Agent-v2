@@ -52,6 +52,24 @@ describe("Gemini client (mocked network)", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("with busyWaits [] it switches to the next model at once instead of waiting, and tries the busy model last next time", async () => {
+    process.env.GEMINI_API_KEY = "k";
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      urls.push(url);
+      return url.includes("3.5-flash-lite") ? new Response('{"error":{"message":"overloaded"}}', { status: 503 }) : ok(rfp2);
+    }));
+    const t0 = Date.now();
+    const first = await callGemini("s", "u", undefined, { models: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"], busyWaits: [] });
+    expect(Date.now() - t0).toBeLessThan(1_000);
+    expect(first.model).toBe("gemini-3.1-flash-lite");
+    expect(urls).toHaveLength(2);
+    // second call: the busy model is now tried last, so only one request is needed
+    const second = await callGemini("s", "u", undefined, { models: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"], busyWaits: [] });
+    expect(second.model).toBe("gemini-3.1-flash-lite");
+    expect(urls).toHaveLength(3);
+  });
+
   it("explains what each model said when all are overloaded", async () => {
     process.env.GEMINI_API_KEY = "k";
     process.env.GEMINI_RETRY_BUDGET_MS = "0";
