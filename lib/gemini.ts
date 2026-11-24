@@ -153,9 +153,28 @@ export interface GeminiCallOptions {
   thinkingLevel?: "low" | "medium" | "high";
 }
 
+/**
+ * Per-instance memory of models that can't serve right now, so we stop spending
+ * requests on them: daily quota used up (until the next reset, midnight Pacific)
+ * or model not available to this key (for a day).
+ */
+const unavailableUntil = new Map<string, { until: number; why: string }>();
+function nextPacificMidnight(now = Date.now()): number {
+  // Midnight Pacific is 07:00 or 08:00 UTC; use 08:00 UTC (safe side).
+  const d = new Date(now);
+  const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 8);
+  return t > now ? t : t + 86_400_000;
+}
+export function markUnavailable(model: string, why: string, until: number) {
+  unavailableUntil.set(model, { until, why });
+}
+export function resetModelMemory() {
+  unavailableUntil.clear();
+}
+
 export function defaultModels(): string[] {
-  const primary = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-  const fallbacks = (process.env.GEMINI_FALLBACK_MODELS ?? "gemini-3.5-flash-lite,gemini-3.7-flash")
+  const primary = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+  const fallbacks = (process.env.GEMINI_FALLBACK_MODELS ?? "gemini-3.1-flash-lite,gemini-3.8-flash")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
@@ -211,6 +230,12 @@ export async function callGemini(
   const ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS ?? 90_000);
 
   for (const model of opts.models?.length ? opts.models : defaultModels()) {
+    const known = unavailableUntil.get(model);
+    if (known && known.until > Date.now()) {
+      attempts.push(`${model}: skipped (${known.why})`);
+      if (known.why.includes("quota")) lastStatus = 429;
+      continue;
+    }
     let safe = false;
     let busyRetries = 0;
     while (true) {
@@ -252,6 +277,10 @@ export async function callGemini(
         const detail = googleMessage(await res.text().catch(() => ""));
         attempts.push(`${model}: HTTP ${res.status}${detail ? ` (${detail})` : ""}`);
         lastStatus = res.status === 429 ? 429 : 503;
+        // Daily free-tier quota used up: remember it until the reset so we don't keep asking.
+        if (res.status === 429 && /free_tier_requests|per day|PerDay/i.test(detail)) {
+          markUnavailable(model, "daily quota used up", nextPacificMidnight());
+        }
         // Overloaded: wait briefly and retry once. Quota used up (429): retrying only wastes requests, so fall back now.
         // With a backup provider configured, don't spend long waiting on a busy Gemini.
         const waits = opts.quick ? [2_000] : [3_000, 8_000, 15_000];
@@ -264,6 +293,7 @@ export async function callGemini(
       }
       if (res.status === 404) {
         attempts.push(`${model}: not available to this API key (HTTP 404)`);
+        markUnavailable(model, "not available to this key", Date.now() + 86_400_000);
         break; // retired model: next one
       }
       if (res.status === 400 && !safe) {

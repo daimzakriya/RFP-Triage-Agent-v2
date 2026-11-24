@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { callGemini, GEMINI_RESPONSE_SCHEMA, generationConfig, LlmError } from "@/lib/gemini";
+import { callGemini, GEMINI_RESPONSE_SCHEMA, generationConfig, LlmError, resetModelMemory } from "@/lib/gemini";
 import rfp2 from "@/fixtures/sample-rfp-2.model.json";
 
 const ok = (json: unknown) =>
   new Response(JSON.stringify({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify(json) }] } }] }), { status: 200 });
 
 afterEach(() => {
+  resetModelMemory();
   vi.unstubAllGlobals();
   delete process.env.GEMINI_API_KEY;
 });
@@ -18,7 +19,7 @@ describe("Gemini client (mocked network)", () => {
     const res = await callGemini("sys", "user");
     expect(res.json).toEqual(rfp2);
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toContain("gemini-3.8-flash:generateContent");
+    expect(url).toContain("gemini-3.5-flash-lite:generateContent");
     expect(url).not.toContain("test-key");
     expect((init.headers as Record<string, string>)["x-goog-api-key"]).toBe("test-key");
     const body = JSON.parse(init.body as string);
@@ -35,7 +36,7 @@ describe("Gemini client (mocked network)", () => {
     vi.stubGlobal("fetch", fetchMock);
     const res = await callGemini("s", "u");
     delete process.env.GEMINI_RETRY_BUDGET_MS;
-    expect(res.model).toBe("gemini-3.5-flash-lite");
+    expect(res.model).toBe("gemini-3.1-flash-lite");
   });
 
   it("waits and retries the same model when it is overloaded (503)", async () => {
@@ -47,7 +48,7 @@ describe("Gemini client (mocked network)", () => {
     await vi.advanceTimersByTimeAsync(3_500);
     const res = await p;
     vi.useRealTimers();
-    expect(res.model).toBe("gemini-3.8-flash");
+    expect(res.model).toBe("gemini-3.5-flash-lite");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -58,9 +59,9 @@ describe("Gemini client (mocked network)", () => {
     const err = await callGemini("s", "u").catch((e) => e);
     delete process.env.GEMINI_RETRY_BUDGET_MS;
     expect(err.status).toBe(503);
-    expect(err.message).toMatch(/gemini-3.8-flash: HTTP 503 \(The model is overloaded.\)/);
-    expect(err.message).toMatch(/gemini-3.5-flash-lite/);
-    expect(err.message).toMatch(/gemini-3.7-flash/);
+    expect(err.message).toMatch(/gemini-3.5-flash-lite: HTTP 503 \(The model is overloaded.\)/);
+    expect(err.message).toMatch(/gemini-3.1-flash-lite/);
+    expect(err.message).toMatch(/gemini-3.8-flash/);
   });
 
   it("does not retry a model whose quota is used up (429); it falls back at once", async () => {
@@ -68,7 +69,7 @@ describe("Gemini client (mocked network)", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{"error":{"message":"You exceeded your current quota."}}', { status: 429 })).mockResolvedValueOnce(ok(rfp2));
     vi.stubGlobal("fetch", fetchMock);
     const res = await callGemini("s", "u");
-    expect(res.model).toBe("gemini-3.5-flash-lite");
+    expect(res.model).toBe("gemini-3.1-flash-lite");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -81,14 +82,14 @@ describe("Gemini client (mocked network)", () => {
     vi.stubGlobal("fetch", fetchMock);
     const res = await callGemini("s", "u");
     delete process.env.GEMINI_ATTEMPT_TIMEOUT_MS;
-    expect(res.model).toBe("gemini-3.5-flash-lite");
+    expect(res.model).toBe("gemini-3.1-flash-lite");
   });
 
   it("moves to the fallback model when a model is retired (404)", async () => {
     process.env.GEMINI_API_KEY = "k";
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response('{"error":{"code":404}}', { status: 404 })).mockResolvedValueOnce(ok(rfp2));
     vi.stubGlobal("fetch", fetchMock);
-    expect((await callGemini("s", "u")).model).toBe("gemini-3.5-flash-lite");
+    expect((await callGemini("s", "u")).model).toBe("gemini-3.1-flash-lite");
   });
 
   it("retries once with plain settings when a model rejects an optional setting (400)", async () => {
@@ -96,13 +97,26 @@ describe("Gemini client (mocked network)", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response("bad thinking", { status: 400 })).mockResolvedValueOnce(ok(rfp2));
     vi.stubGlobal("fetch", fetchMock);
     const res = await callGemini("s", "u");
-    expect(res.model).toBe("gemini-3.8-flash");
+    expect(res.model).toBe("gemini-3.5-flash-lite");
     const body = JSON.parse((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].body as string);
     expect(body.generationConfig.thinkingConfig).toBeUndefined();
   });
 
   it("uses thinkingBudget and temperature 0 for 2.5 models", () => {
     expect(generationConfig("gemini-2.5-flash")).toMatchObject({ temperature: 0, thinkingConfig: { thinkingBudget: 1024 } });
+  });
+
+  it("remembers a model whose daily quota is used up and stops calling it", async () => {
+    process.env.GEMINI_API_KEY = "k";
+    const quota = '{"error":{"message":"You exceeded your current quota. Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20"}}';
+    const fetchMock = vi.fn(async (url: string) =>
+      url.includes("gemini-3.5-flash-lite") ? new Response(quota, { status: 429 }) : ok(rfp2),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await callGemini("s", "u");
+    await callGemini("s", "u");
+    const calls38 = fetchMock.mock.calls.filter(([u]) => String(u).includes("gemini-3.5-flash-lite")).length;
+    expect(calls38).toBe(1);
   });
 
   it("gives a clear error when the key is missing", async () => {

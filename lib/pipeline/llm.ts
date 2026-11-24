@@ -82,12 +82,20 @@ export function sumUsage(rs: { usage: LlmUsage }[]): LlmUsage {
   );
 }
 
-/** Model lists per role, configurable. Extraction favours the high-quota Flash-Lite; reasoning favours Flash. */
+/**
+ * Model lists per role, configurable. On the free tier every model has its OWN quota
+ * (Flash-Lite 500/day, the Flash models ~20/day each), and overloads hit models
+ * separately, so spreading across several models is what keeps the app available.
+ * Extraction uses only the high-quota Flash-Lite models; the scarce 3.8 Flash is
+ * reserved for the single reasoning call per RFP.
+ */
 export function extractionModels(): string[] {
-  return list(process.env.EXTRACT_MODELS, ["gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash"]);
+  // High-throughput extraction: two Flash-Lite models, 15 RPM / 500 RPD each. 3.8 Flash is never used here.
+  return list(process.env.EXTRACT_MODELS, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
 }
 export function reasoningModels(): string[] {
-  return list(process.env.REASON_MODELS, ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"]);
+  // Final evaluation: 3.8 Flash when available (5 RPM / 20 RPD), otherwise the Flash-Lite models.
+  return list(process.env.REASON_MODELS, ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
 }
 function list(env: string | undefined, dflt: string[]) {
   const v = (env ?? "").split(",").map((s) => s.trim()).filter(Boolean);
