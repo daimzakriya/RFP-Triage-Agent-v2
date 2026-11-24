@@ -23,7 +23,7 @@ Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call,
 
 The top-level shape matches the brief's example (`decision`, `fit_score`, `deadlines[{what, date}]`, `requirements`, `reasons`), plus the extra fields above. Every evidence item carries a `check` result: `verified`, `relocated`, `approximate` or `unverified`.
 
-## Bonus feature: Bid Desk
+## Bonus feature: Bid Desk and evidence in the PDF
 
 The brief pictures a bids lead on a Monday with three new RFPs, so the bonus feature is built for that moment.
 
@@ -36,7 +36,32 @@ The brief pictures a bids lead on a Monday with three new RFPs, so the bonus fea
 
 **How it works:** `lib/desk.ts` (ranking and next action), `lib/ics.ts` (RFC 5545 export with all-day events, so a "3:00 PM Pacific" deadline never lands on the wrong day in another time zone), `components/BidDesk.tsx`.
 
-A second, smaller extra is the **source viewer**. Click any `p.5 ✓` badge to open that page's extracted text with the quote highlighted. A reviewer can check a date in two seconds without opening the PDF.
+### Part two: evidence highlighted in the original PDF
+
+Click any `p.5 ✓` badge and the **original PDF** opens at that page, scrolled to the passage, highlighted in a colour that says what kind of finding it is:
+
+| Colour | Findings |
+|---|---|
+| Yellow | Deadlines, dates and addenda |
+| Red | Mandatory requirements and blocking deal-breakers |
+| Blue | Evaluation criteria, award basis, scored requirements |
+| Green | Eligibility and compliance (set-asides, experience, registrations, certifications, insurance) |
+| Purple | Contract obligations (value, term, payment, termination, IP) |
+| Orange | Risks, "verify" deal-breakers and ambiguous facts |
+| Grey | Other key facts and submission items |
+
+Every other finding on the same page is highlighted too, with ▲ ▼ to step between them. Zoom from 50% to 300%; highlights stay in place because they are stored as fractions of the page, not pixels. A legend is shown in the report and in the viewer, and each badge carries its colour dot.
+
+**Why:** a bid/no-bid call is only as good as the evidence behind it. The reviewer shouldn't have to trust the AI or hunt through 40 pages; one click shows the sentence in the document the agency actually issued.
+
+**How it works** (`lib/evidence-map.ts`, `lib/pdf-store.ts`, `components/PdfEvidenceViewer.tsx`):
+
+1. **Positions captured once.** When the PDF is read in the browser, pdf.js gives every text run with its transform; these are converted to page-relative boxes in the same pass. Nothing is re-read when a finding is clicked.
+2. **Located once, after analysis.** Each quote is matched against those runs: exact match first, on text normalised for case, whitespace, line breaks, hyphenation, curly quotes, ligatures and accents. Only if that fails, a strict fuzzy fallback looks for a window of page words covering at least 85% of the quote's words. A short quote that occurs more than once on a page is not pinned. When no confident match exists, the viewer opens the page and says that precise highlighting is unavailable, with the reason; it never highlights a lookalike passage.
+3. **Stored with the report.** Each finding keeps its document ID, page, quote, category, boxes and match confidence (`exact` / `fuzzy` / `none` plus a score). The original PDF is kept in the browser's IndexedDB, so the viewer still works after a reload; each Bid Desk entry points to its own PDF, so several uploaded RFPs never get mixed up. Removing an RFP from the desk deletes its PDF.
+4. **Rendering** uses the pdf.js build already in the app (via unpdf), so no extra viewer library was added. Older reports, or a browser that blocks storage, fall back to the page-text viewer.
+
+On both sample RFPs, all 88 quoted findings are located with an exact match (`tests/evidence-map.test.ts` runs this on the real sample PDF). Scanned PDFs are already rejected at upload with a request to OCR them first, so there is no OCR step in the browser.
 
 ## How it works
 
@@ -236,6 +261,9 @@ lib/schema.ts                zod schema for the model answer and report types
 lib/verify.ts                Quote search, date checks, addendum detection
 lib/score.ts                 Rubric, score cap, decision rule
 lib/desk.ts, lib/ics.ts      Bonus feature: ranking and calendar export
+lib/evidence-map.ts          Bonus feature: quote positions, matching, highlight categories
+lib/pdf-store.ts             Original PDFs kept in the browser (IndexedDB)
+components/PdfEvidenceViewer.tsx  PDF viewer with highlights, legend, zoom, navigation
 lib/profile.ts               idiaz.io profile (from the brief) and the list of unknowns
 evals/expected.json          Hand-checked ground truth for the samples (benchmark only)
 scripts/bench.ts             Benchmark / eval runner
@@ -249,7 +277,7 @@ tests/                       Vitest unit tests
 - **Up to about 150 pages / 600k characters per document.** Very long RFPs may need large appendices removed. Response time grows with length.
 - **Free-tier quota.** Gemini's free tier is small: about 20 requests a day for Gemini 3.8 Flash and 500 for 3.5 Flash-Lite, resetting at midnight Pacific. When a model's quota is used up, the app moves to the next model at once and says so in plain words if all are exhausted. Google may use free-tier prompts to improve its products, so use the paid tier for confidential RFPs.
 - **The fit score is only as good as the profile.** The profile in the brief is short, so unknowns become "verify" items rather than guesses.
-- **The Bid Desk is stored per browser.** There's no sharing between teammates without a backend, which the brief puts out of scope.
+- **The Bid Desk and the original PDFs are stored per browser.** There's no sharing between teammates without a backend, which the brief puts out of scope.
 - **More model calls per RFP in v2.** Four calls instead of one; with Flash's ~20 requests/day free limit, the reasoning step falls back to Flash-Lite after about 20 analyses a day.
 - **Implicit caching is best-effort.** Gemini decides when to serve the shared document prefix from cache; the footer and benchmark show the cached token count actually achieved.
 - **Long-document routing is keyword-based.** Documents over ~60k tokens are routed by section signals; any page no worker claims goes to the requirements worker, so nothing is skipped, but a fact on an unusual page may reach a less relevant worker.

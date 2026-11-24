@@ -1,9 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { daysUntil, formatIsoLong } from "@/lib/dates";
 import type { Requirement, TriageReport } from "@/lib/schema";
-import { EvidenceList } from "./Evidence";
+import { collectFindings } from "@/lib/evidence-map";
+import { CategoryContext, EvidenceList } from "./Evidence";
+import { Icon } from "./Icon";
+import { Legend } from "./PdfEvidenceViewer";
+
+/** Circular fit gauge (0–10). */
+function Ring({ value, tone }: { value: number; tone: "bid" | "nobid" | "pending" }) {
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(10, value)) / 10;
+  return (
+    <svg className={`ring ${tone}`} viewBox="0 0 120 120" width="132" height="132" aria-hidden="true">
+      <circle cx="60" cy="60" r={r} className="ring-track" />
+      <circle cx="60" cy="60" r={r} className="ring-val" strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 60 60)" />
+    </svg>
+  );
+}
+
+function Kpi({ icon, label, value, sub, tone }: { icon: string; label: string; value: React.ReactNode; sub?: React.ReactNode; tone?: string }) {
+  return (
+    <div className={`kpi ${tone ?? ""}`}>
+      <div className="kpi-head"><Icon name={icon} size={14} /> {label}</div>
+      <div className="kpi-val">{value}</div>
+      {sub && <div className="kpi-sub">{sub}</div>}
+    </div>
+  );
+}
 
 const FACT_LABELS: Record<keyof TriageReport["facts"], string> = {
   agency: "Agency",
@@ -72,6 +98,11 @@ export function Report({
   const warnings = r.review_flags.filter((f) => f.level === "warning");
   const infos = r.review_flags.filter((f) => f.level === "info");
 
+  const proposal = r.deadlines.find((d) => d.kind === "proposal_due");
+  const musts = r.requirements.filter((q) => q.mandatory);
+  const money = r.facts.contract_value.status === "not_stated" ? null : (/\$\s?[\d,.]+(?:\s?(?:million|billion|[MK]))?/i.exec(r.facts.contract_value.value)?.[0] ?? null);
+  const blocking = r.deal_breakers.filter((d) => d.severity === "blocking").length;
+  const categories = useMemo(() => new Map(collectFindings(r).map((f) => [f.key, f.category])), [r]);
   const grouped = REQ_ORDER.map((cat) => ({ cat, items: r.requirements.filter((q) => q.category === cat) })).filter((g) => g.items.length);
 
   function copyQuestions() {
@@ -88,64 +119,100 @@ export function Report({
   }
 
   return (
+    <CategoryContext.Provider value={categories}>
     <div>
       {/* ---------- decision ---------- */}
-      <section className="card" aria-labelledby="decision-h">
+      <section className="card hero-card" id="sec-verdict" aria-labelledby="decision-h">
         <div className="hero">
           <div className={`verdict ${r.degraded ? "pending" : bid ? "bid" : "nobid"}`}>
             <div className="label" style={{ color: "inherit" }}>Recommendation</div>
+            <div className="verdict-ring">
+              <Ring value={r.degraded ? 0 : r.fit_score} tone={r.degraded ? "pending" : bid ? "bid" : "nobid"} />
+              <div className="verdict-center">
+                {r.degraded ? <span className="ring-na">—</span> : <><b>{r.fit_score}</b><span>/10 fit</span></>}
+              </div>
+            </div>
             <div className="word" id="decision-h">{r.degraded ? "NO CALL YET" : bid ? "BID" : "NO BID"}</div>
-            {r.degraded ? (
+            {r.degraded && (
               <>
-                <p className="small" style={{ margin: "0 0 10px", color: "var(--ink-2)" }}>
+                <p className="small" style={{ margin: "0 0 10px" }}>
                   The free AI models were busy, so this is a text-search report without a fit score.
                 </p>
                 {onRetry && (
                   <button className="btn btn-primary btn-sm no-print" onClick={onRetry} disabled={retrying}>
-                    {retrying ? "Retrying…" : "↻ Retry full analysis"}
+                    <Icon name="refresh" /> {retrying ? "Retrying…" : "Retry full analysis"}
                   </button>
                 )}
               </>
-            ) : (
-              <>
-                <div className="score">
-                  <b>{r.fit_score}</b> / 10 fit
-                </div>
-                <div className="gauge" aria-hidden="true">
-                  <span style={{ width: `${r.fit_score * 10}%` }} />
-                </div>
-              </>
             )}
-            {r.fastNoBid && <div style={{ marginTop: 10 }}><span className="chip chip-nobid">⚡ fast no-bid</span></div>}
+            {r.fastNoBid && <div style={{ marginTop: 10 }}><span className="chip chip-nobid"><Icon name="zap" size={12} /> fast no-bid</span></div>}
           </div>
-          <div>
-            <div className="label">
+          <div className="hero-main">
+            <div className="label hero-meta">
               {r.solicitation_number || "No solicitation number"}
               {r.facts.agency.status !== "not_stated" && <> · {r.facts.agency.value}</>}
             </div>
-            <h2 style={{ marginTop: 4 }}>{r.title}</h2>
+            <h2 className="hero-title">{r.title}</h2>
             {r.decisionNote && <div className="alert alert-info" style={{ margin: "10px 0" }}>{r.decisionNote}</div>}
-            {r.reasons.length > 0 && (
-              <>
-                <h3 style={{ marginTop: 14 }}>Three strongest reasons</h3>
-                <ol className="reasons">{r.reasons.map((x, i) => <li key={i}>{x}</li>)}</ol>
-              </>
-            )}
-            {r.change_mind.length > 0 && (
-              <>
-                <h3 style={{ marginTop: 12 }}>What would change our mind</h3>
-                <ul className="reasons">{r.change_mind.map((x, i) => <li key={i}>{x}</li>)}</ul>
-              </>
-            )}
+            <div className="kpis">
+              <Kpi
+                icon="calendar"
+                label="Proposal due"
+                value={proposal?.date ? formatIsoLong(proposal.date) : "Not stated"}
+                sub={proposal?.date ? <DaysLeft iso={proposal.date} /> : undefined}
+              />
+              <Kpi
+                icon="coins"
+                label="Contract value"
+                value={money ?? (r.facts.contract_value.status === "not_stated" ? "Not stated" : "See summary")}
+                sub={money && r.facts.contract_value.value.length > money.length + 4 ? <span title={r.facts.contract_value.value}>{/not[- ]to[- ]exceed|cap|max/i.test(r.facts.contract_value.value) ? "ceiling · details in summary" : "details in summary"}</span> : undefined}
+              />
+              <Kpi
+                icon="checks"
+                label="Must-haves"
+                value={musts.length}
+                sub={<>{musts.filter((q) => q.compliance === "compliant").length} met · {musts.filter((q) => q.compliance === "verify" || q.compliance === "partial" || q.compliance === "unknown").length} to verify</>}
+              />
+              <Kpi
+                icon="alert"
+                label="Deal-breakers"
+                value={r.deal_breakers.length}
+                tone={blocking > 0 ? "bad" : r.deal_breakers.length ? "warn" : "good"}
+                sub={blocking > 0 ? `${blocking} blocking` : r.deal_breakers.length ? "verify only" : "none found"}
+              />
+              <Kpi
+                icon="shield"
+                label="Evidence"
+                value={<>{r.evidence_stats.verified}<small>/{r.evidence_stats.total}</small></>}
+                sub="quotes found word for word"
+                tone={r.evidence_stats.unverified ? "warn" : "good"}
+              />
+            </div>
           </div>
         </div>
+        {(r.reasons.length > 0 || r.change_mind.length > 0) && (
+          <div className="hero-reasons">
+            {r.reasons.length > 0 && (
+              <div>
+                <h3><Icon name="sparkles" size={15} /> Three strongest reasons</h3>
+                <ol className="reasons">{r.reasons.map((x, i) => <li key={i}>{x}</li>)}</ol>
+              </div>
+            )}
+            {r.change_mind.length > 0 && (
+              <div>
+                <h3><Icon name="refresh" size={15} /> What would change our mind</h3>
+                <ul className="reasons">{r.change_mind.map((x, i) => <li key={i}>{x}</li>)}</ul>
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* ---------- review flags ---------- */}
-      <section className="card" aria-labelledby="review-h">
+      <section className="card trust" aria-labelledby="review-h">
         <div className="card-head">
           <h2 id="review-h">
-            Check before you trust it{" "}
+            <Icon name="shield" size={18} /> Check before you trust it{" "}
             {r.quality && (
               <span className={`chip ${r.quality.status === "verified" ? "chip-bid" : r.quality.status === "needs_review" ? "chip-warn" : "chip-nobid"}`}>
                 {r.quality.status === "verified" ? "all checks passed" : r.quality.status === "needs_review" ? "needs review" : "incomplete"}
@@ -174,6 +241,12 @@ export function Report({
             </ul>
           </details>
         )}
+        <div className="hl-hint no-print">
+          <p className="small" style={{ margin: "0 0 6px" }}>
+            <b>See it in the PDF:</b> click any <span className="ev-btn verified" aria-hidden="true">p.5 ✓</span> badge to open the original page with the passage highlighted. Colours:
+          </p>
+          <Legend compact />
+        </div>
         {r.review_flags.length === 0 ? (
           <p className="small muted" style={{ margin: 0 }}>No conflicts, ambiguities or unverified quotes were found.</p>
         ) : (
@@ -191,8 +264,8 @@ export function Report({
       <div className="grid-2" style={{ marginTop: 16 }}>
         <div>
           {/* ---------- summary & facts ---------- */}
-          <section className="card" aria-labelledby="summary-h">
-            <div className="label"><span className="num">01</span>Summary</div>
+          <section className="card" id="sec-summary" aria-labelledby="summary-h">
+            <div className="label"><span className="num">01</span><Icon name="summary" size={13} /> Summary</div>
             <h2 id="summary-h" className="sr-only">Summary</h2>
             <p style={{ marginTop: 6 }}>{r.summary}</p>
             <div className="kv" style={{ marginTop: 8 }}>
@@ -214,8 +287,8 @@ export function Report({
           </section>
 
           {/* ---------- requirements ---------- */}
-          <section className="card" aria-labelledby="req-h">
-            <div className="label"><span className="num">03</span>Requirements</div>
+          <section className="card" id="sec-requirements" aria-labelledby="req-h">
+            <div className="label"><span className="num">02</span><Icon name="checks" size={13} /> Requirements</div>
             <h2 id="req-h" className="sr-only">Requirements</h2>
             {grouped.length === 0 && <p className="not-stated">No requirements stated.</p>}
             {grouped.map((g) => (
@@ -249,10 +322,10 @@ export function Report({
 
         <div>
           {/* ---------- dates ---------- */}
-          <section className="card" aria-labelledby="dates-h">
+          <section className="card" id="sec-dates" aria-labelledby="dates-h">
             <div className="card-head">
-              <div className="label"><span className="num">02</span>Key dates</div>
-              <button className="btn btn-sm no-print" onClick={onDownloadIcs}>＋ Add to calendar</button>
+              <div className="label"><span className="num">03</span><Icon name="calendar" size={13} /> Key dates</div>
+              <button className="btn btn-sm no-print" onClick={onDownloadIcs}><Icon name="plus" /> Add to calendar</button>
             </div>
             <h2 id="dates-h" className="sr-only">Key dates</h2>
             <ol className="timeline">
@@ -284,7 +357,7 @@ export function Report({
           {/* ---------- addenda ---------- */}
           {r.addenda && r.addenda.length > 0 && (
             <section className="card" aria-labelledby="add-h">
-              <div className="label">Addenda</div>
+              <div className="label"><Icon name="layers" size={13} /> Addenda</div>
               <h2 id="add-h" className="sr-only">Addenda</h2>
               <ul className="req-list">
                 {r.addenda.map((a, i) => (
@@ -308,9 +381,9 @@ export function Report({
 
           {/* ---------- fit ---------- */}
           {!r.degraded && (
-          <section className="card" aria-labelledby="fit-h">
+          <section className="card" id="sec-fit" aria-labelledby="fit-h">
             <div className="card-head">
-              <div className="label"><span className="num">04</span>Fit score</div>
+              <div className="label"><span className="num">04</span><Icon name="gauge" size={13} /> Fit score</div>
               <span className="score"><b>{r.fit_score}</b> / 10</span>
             </div>
             <h2 id="fit-h" className="sr-only">Fit score breakdown</h2>
@@ -330,8 +403,8 @@ export function Report({
 
           {/* ---------- evaluation & submission ---------- */}
           {(r.evaluation_criteria || r.submission_items) && (
-            <section className="card" aria-labelledby="ev-h">
-              <div className="label"><span className="num">06</span>How it's scored & what to submit</div>
+            <section className="card" id="sec-scoring" aria-labelledby="ev-h">
+              <div className="label"><span className="num">05</span><Icon name="scale" size={13} /> How it's scored & what to submit</div>
               <h2 id="ev-h" className="sr-only">Evaluation and submission</h2>
               {r.evaluation_criteria && r.evaluation_criteria.length > 0 ? (
                 <table className="desk" style={{ marginTop: 6 }}>
@@ -390,8 +463,8 @@ export function Report({
           )}
 
           {/* ---------- deal-breakers & questions ---------- */}
-          <section className="card" aria-labelledby="db-h">
-            <div className="label"><span className="num">05</span>Deal-breakers</div>
+          <section className="card" id="sec-risks" aria-labelledby="db-h">
+            <div className="label"><span className="num">06</span><Icon name="alert" size={13} /> Deal-breakers</div>
             <h2 id="db-h" className="sr-only">Deal-breakers</h2>
             {r.deal_breakers.length === 0 ? (
               <p className="small muted">{r.degraded ? "Needs the AI assessment. Use Retry." : "None found."}</p>
@@ -436,5 +509,6 @@ export function Report({
         )}
       </p>
     </div>
+    </CategoryContext.Provider>
   );
 }

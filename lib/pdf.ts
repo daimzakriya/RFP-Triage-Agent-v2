@@ -4,6 +4,7 @@
  * Uses unpdf, a serverless build of Mozilla pdf.js (Apache-2.0).
  */
 
+import { pageRuns, type TextRun } from "./evidence-map";
 import { LIMITS } from "./limits";
 export { LIMITS };
 
@@ -52,9 +53,11 @@ export interface ExtractedPdf {
   pages: string[];
   pageCount: number;
   characters: number;
+  /** Text runs with their positions on each page (only when asked for), used to highlight evidence. */
+  runs?: TextRun[][];
 }
 
-export async function extractPdfPages(bytes: Uint8Array): Promise<ExtractedPdf> {
+export async function extractPdfPages(bytes: Uint8Array, opts: { positions?: boolean } = {}): Promise<ExtractedPdf> {
   if (bytes.byteLength > LIMITS.maxFileBytes) {
     throw new PdfInputError(
       `This file is ${(bytes.byteLength / 1048576).toFixed(1)} MB. The limit is ${LIMITS.maxFileBytes / 1048576} MB.`,
@@ -96,5 +99,17 @@ export async function extractPdfPages(bytes: Uint8Array): Promise<ExtractedPdf> 
     );
   }
 
-  return { pages, pageCount: pages.length, characters };
+  // Positions are captured in the same pass, once per document, so clicking a finding later
+  // never re-reads the PDF. A failure here only disables precise highlighting.
+  let runs: TextRun[][] | undefined;
+  if (opts.positions) {
+    try {
+      runs = [];
+      for (let i = 1; i <= pdf.numPages; i++) runs.push(await pageRuns(await pdf.getPage(i)));
+    } catch {
+      runs = undefined;
+    }
+  }
+
+  return { pages, pageCount: pages.length, characters, runs };
 }

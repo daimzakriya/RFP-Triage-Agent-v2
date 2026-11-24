@@ -3,6 +3,7 @@
  * which one to work on first, and what is due next.
  */
 import { daysUntil } from "./dates";
+import type { Located } from "./evidence-map";
 import type { TriageReport } from "./schema";
 
 export interface DeskItem {
@@ -10,6 +11,10 @@ export interface DeskItem {
   addedAt: string;
   report: TriageReport;
   pages?: string[]; // kept for the source viewer when storage allows
+  /** Key of the original PDF in the browser's PDF store (IndexedDB); kept across retries. */
+  docId?: string;
+  /** Where each quoted finding sits in the PDF (computed once after analysis). Keyed by "page|quote". */
+  locations?: Record<string, Located>;
 }
 
 export interface NextAction {

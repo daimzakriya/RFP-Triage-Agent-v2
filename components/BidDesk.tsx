@@ -1,6 +1,7 @@
 "use client";
 
 import { formatIsoShort } from "@/lib/dates";
+import { Icon } from "./Icon";
 import { nextAction, proposalDue, rankDesk, type DeskItem } from "@/lib/desk";
 import { DaysLeft } from "./Report";
 
@@ -21,15 +22,15 @@ export function BidDesk({
   const bids = items.filter((i) => i.report.decision === "BID").length;
 
   return (
-    <section className="card" aria-labelledby="desk-h">
+    <section className="card desk-card" aria-labelledby="desk-h">
       <div className="card-head">
         <div>
-          <div className="label">Bonus feature · Bid Desk</div>
+          <div className="label"><Icon name="desk" size={13} /> Bonus feature · Bid Desk</div>
           <h2 id="desk-h">What to work on first</h2>
         </div>
         {items.length > 0 && (
           <button className="btn btn-sm" onClick={onExportAll} title="Calendar file with every dated deadline for the RFPs marked BID">
-            ＋ Calendar for all BIDs
+            <Icon name="calendar" /> Calendar for all BIDs
           </button>
         )}
       </div>
@@ -101,7 +102,7 @@ export function BidDesk({
                       </td>
                       <td>
                         <button className="btn btn-ghost btn-sm" onClick={() => onRemove(it.id)} aria-label={`Remove ${r.title}`}>
-                          ✕
+                          <Icon name="x" />
                         </button>
                       </td>
                     </tr>
