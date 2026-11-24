@@ -10,7 +10,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "eval": "tsx scripts/eval-samples.ts"
+    "eval": "tsx scripts/bench.ts --eval",
+    "bench": "tsx scripts/bench.ts"
   },
   "engines": {
     "node": ">=20"

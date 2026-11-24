@@ -132,13 +132,28 @@ export class LlmError extends Error {
   }
 }
 
+export interface LlmUsage {
+  input: number; // prompt tokens (including cached)
+  output: number; // answer tokens
+  thinking: number; // reasoning tokens (Gemini "thoughts")
+  cached: number; // prompt tokens served from Gemini's implicit cache
+}
+
 export interface LlmResult {
   json: unknown;
   model: string;
   latencyMs: number;
+  usage?: LlmUsage;
 }
 
-function models(): string[] {
+export interface GeminiCallOptions {
+  quick?: boolean; // short busy-retries (a backup provider is available)
+  schema?: object; // response schema; defaults to the full single-call report schema
+  models?: string[]; // model order for this call; defaults to GEMINI_MODEL + GEMINI_FALLBACK_MODELS
+  thinkingLevel?: "low" | "medium" | "high";
+}
+
+export function defaultModels(): string[] {
   const primary = process.env.GEMINI_MODEL || "gemini-3.8-flash";
   const fallbacks = (process.env.GEMINI_FALLBACK_MODELS ?? "gemini-3.5-flash-lite,gemini-3.7-flash")
     .split(",")
@@ -154,16 +169,16 @@ function models(): string[] {
  * - Gemini 2.5: thinkingBudget (tokens) and temperature 0.
  * `safe` drops the optional knobs; it's used to retry once if a model rejects a setting.
  */
-export function generationConfig(model: string, safe = false) {
+export function generationConfig(model: string, safe = false, schema: object = GEMINI_RESPONSE_SCHEMA, thinkingLevel?: string) {
   const base: Record<string, unknown> = {
     responseMimeType: "application/json",
-    responseSchema: GEMINI_RESPONSE_SCHEMA,
+    responseSchema: schema,
   };
   if (safe) return base;
   const m = /gemini-(\d+)(?:\.(\d+))?/.exec(model);
   const major = m ? Number(m[1]) : 3;
   if (major >= 3) {
-    return { ...base, maxOutputTokens: 32768, thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING_LEVEL || "low" } };
+    return { ...base, maxOutputTokens: 32768, thinkingConfig: { thinkingLevel: thinkingLevel || process.env.GEMINI_THINKING_LEVEL || "low" } };
   }
   return {
     ...base,
@@ -177,7 +192,7 @@ export async function callGemini(
   system: string,
   user: string,
   signal?: AbortSignal,
-  opts: { quick?: boolean } = {},
+  opts: GeminiCallOptions = {},
 ): Promise<LlmResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) {
@@ -195,7 +210,7 @@ export async function callGemini(
   // An overloaded model can take minutes; cap each attempt so we can fall back in time.
   const ATTEMPT_MS = Number(process.env.GEMINI_ATTEMPT_TIMEOUT_MS ?? 90_000);
 
-  for (const model of models()) {
+  for (const model of opts.models?.length ? opts.models : defaultModels()) {
     let safe = false;
     let busyRetries = 0;
     while (true) {
@@ -214,7 +229,7 @@ export async function callGemini(
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
             contents: [{ role: "user", parts: [{ text: user }] }],
-            generationConfig: generationConfig(model, safe),
+            generationConfig: generationConfig(model, safe, opts.schema, opts.thinkingLevel),
           }),
         });
         data = res.ok ? await res.json() : null; // the body streams in after headers; keep it under the same timeout
@@ -276,7 +291,18 @@ export async function callGemini(
         break;
       }
       try {
-        return { json: JSON.parse(text), model, latencyMs: Date.now() - started };
+        const u = data?.usageMetadata ?? {};
+        return {
+          json: JSON.parse(text),
+          model,
+          latencyMs: Date.now() - started,
+          usage: {
+            input: u.promptTokenCount ?? 0,
+            output: u.candidatesTokenCount ?? 0,
+            thinking: u.thoughtsTokenCount ?? 0,
+            cached: u.cachedContentTokenCount ?? 0,
+          },
+        };
       } catch {
         attempts.push(`${model}: malformed JSON (finish reason ${cand?.finishReason})`);
         break;

@@ -24,9 +24,22 @@ const REQ_LABELS: Record<Requirement["category"], string> = {
   staffing: "Staffing & key personnel",
   skill: "Required skills & capabilities",
   technical: "Technical mandates",
+  security_privacy: "Security, hosting & data",
+  accessibility: "Accessibility & language access",
   insurance_bonding: "Insurance & bonding",
+  contract_terms: "Contract obligations",
   other: "Other",
 };
+
+const COMPLIANCE: Record<string, { label: string; cls: string; tip: string }> = {
+  compliant: { label: "meets", cls: "chip-bid", tip: "idiaz.io's profile clearly satisfies this" },
+  non_compliant: { label: "can't meet", cls: "chip-nobid", tip: "idiaz.io's profile clearly cannot satisfy this" },
+  partial: { label: "partly", cls: "chip-warn", tip: "Partly satisfied; part unknown or not met" },
+  unknown: { label: "unknown", cls: "chip-neutral", tip: "The profile says nothing about this; confirm with the team" },
+  verify: { label: "verify", cls: "chip-warn", tip: "Plausible, but needs confirmation before bidding" },
+};
+
+const QC_ICON = { pass: "✓", warn: "!", fail: "✕" } as const;
 const REQ_ORDER = Object.keys(REQ_LABELS) as Requirement["category"][];
 
 export function DaysLeft({ iso }: { iso: string }) {
@@ -99,12 +112,36 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
       {/* ---------- review flags ---------- */}
       <section className="card" aria-labelledby="review-h">
         <div className="card-head">
-          <h2 id="review-h">Check before you trust it</h2>
+          <h2 id="review-h">
+            Check before you trust it{" "}
+            {r.quality && (
+              <span className={`chip ${r.quality.status === "verified" ? "chip-bid" : r.quality.status === "needs_review" ? "chip-warn" : "chip-nobid"}`}>
+                {r.quality.status === "verified" ? "all checks passed" : r.quality.status === "needs_review" ? "needs review" : "incomplete"}
+              </span>
+            )}
+          </h2>
           <span className="small muted">
             {r.evidence_stats.verified}/{r.evidence_stats.total} source quotes found word for word
             {r.evidence_stats.unverified > 0 && <> · <b style={{ color: "var(--nobid)" }}>{r.evidence_stats.unverified} not found</b></>}
           </span>
         </div>
+        {r.quality && (
+          <details style={{ marginBottom: 10 }} open={r.quality.status !== "verified"}>
+            <summary className="small" style={{ cursor: "pointer" }}>
+              Quality checks: {r.quality.checks.filter((c) => c.status === "pass").length}/{r.quality.checks.length} passed
+            </summary>
+            <ul className="qc">
+              {r.quality.checks.map((c) => (
+                <li key={c.id} className={`qc-${c.status}`}>
+                  <span aria-hidden="true">{QC_ICON[c.status]}</span>
+                  <span>
+                    <strong>{c.label}</strong> <span className="muted">· {c.detail}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         {r.review_flags.length === 0 ? (
           <p className="small muted" style={{ margin: 0 }}>No conflicts, ambiguities or unverified quotes were found.</p>
         ) : (
@@ -155,11 +192,21 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
                 <ul className="req-list">
                   {g.items.map((q, i) => (
                     <li key={i} className={q.needsReview ? "review" : ""}>
+                      {q.id && <span className="req-id">{q.id}</span>}
                       <span className={`chip ${q.mandatory ? "chip-accent" : "chip-neutral"}`} style={{ marginRight: 6 }}>
                         {q.mandatory ? "must" : "scored"}
                       </span>
                       {q.text}
+                      {q.values && !q.text.includes(q.values) && <span className="muted"> · {q.values}</span>}
                       <EvidenceList evidence={q.evidence} />
+                      {q.compliance && (
+                        <div className="small" style={{ marginTop: 4 }}>
+                          <span className={`chip ${COMPLIANCE[q.compliance].cls}`} title={COMPLIANCE[q.compliance].tip}>
+                            {COMPLIANCE[q.compliance].label}
+                          </span>{" "}
+                          <span className="muted">{q.compliance_reason}</span>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -181,11 +228,17 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
                 <li key={i} className={d.needsReview ? "review" : ""}>
                   <div className="date">
                     {d.date ? formatIsoLong(d.date) : <span className="not-stated">Not stated</span>}
+                    {d.original_date && d.original_date !== d.date && (
+                      <small className="was">
+                        was <s>{formatIsoLong(d.original_date)}</s>
+                      </small>
+                    )}
                     {d.date && <small><DaysLeft iso={d.date} /></small>}
                   </div>
                   <div>
                     <strong>{d.label}</strong>{" "}
                     {d.mandatory && <span className="chip chip-nobid">mandatory</span>}{" "}
+                    {d.revised_by && <span className="chip chip-info">revised · {d.revised_by}</span>}{" "}
                     <StatusChip status={d.status} needsReview={d.needsReview} />
                     {(d.time || d.timezone) && <div className="small muted">{[d.time, d.timezone].filter(Boolean).join(" ")}</div>}
                     <EvidenceList evidence={d.evidence} />
@@ -195,6 +248,31 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
               ))}
             </ol>
           </section>
+
+          {/* ---------- addenda ---------- */}
+          {r.addenda && r.addenda.length > 0 && (
+            <section className="card" aria-labelledby="add-h">
+              <div className="label">Addenda</div>
+              <h2 id="add-h" className="sr-only">Addenda</h2>
+              <ul className="req-list">
+                {r.addenda.map((a, i) => (
+                  <li key={i}>
+                    <strong>{a.label}</strong>
+                    {a.issued_date && <span className="muted"> · issued {a.issued_date}</span>}{" "}
+                    <span className={`chip ${a.confirmed ? "chip-bid" : "chip-warn"}`}>{a.confirmed ? "found in text" : "unconfirmed"}</span>
+                    <div>{a.summary}</div>
+                    {a.changes.map((c, j) => (
+                      <div key={j} className="small">
+                        {c.what}: {c.from && <s>{c.from}</s>} {c.to && <>→ <b>{c.to}</b></>}
+                      </div>
+                    ))}
+                    {a.acknowledgement_required && <div className="small"><span className="chip chip-warn">acknowledge in proposal</span></div>}
+                    <EvidenceList evidence={a.evidence} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           {/* ---------- fit ---------- */}
           <section className="card" aria-labelledby="fit-h">
@@ -215,6 +293,67 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
               BID needs at least 6/10, no blocking deal-breaker, and agreement from the model's judgement.
             </p>
           </section>
+
+          {/* ---------- evaluation & submission ---------- */}
+          {(r.evaluation_criteria || r.submission_items) && (
+            <section className="card" aria-labelledby="ev-h">
+              <div className="label"><span className="num">06</span>How it's scored & what to submit</div>
+              <h2 id="ev-h" className="sr-only">Evaluation and submission</h2>
+              {r.evaluation_criteria && r.evaluation_criteria.length > 0 ? (
+                <table className="desk" style={{ marginTop: 6 }}>
+                  <thead>
+                    <tr><th scope="col">Criterion</th><th scope="col" style={{ textAlign: "right" }}>Points</th></tr>
+                  </thead>
+                  <tbody>
+                    {r.evaluation_criteria.map((c, i) => (
+                      <tr key={i}>
+                        <td>
+                          {c.name} <EvidenceList evidence={c.evidence} />
+                          {c.notes && <div className="note">{c.notes}</div>}
+                        </td>
+                        <td className="days" style={{ textAlign: "right" }}>{c.points ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="small muted">No weighted criteria stated.</p>
+              )}
+              {r.award_basis && (
+                <p className="small" style={{ marginTop: 8 }}>
+                  <strong>Award basis:</strong> {r.award_basis.value} <EvidenceList evidence={r.award_basis.evidence} />
+                </p>
+              )}
+              {r.submission_items && r.submission_items.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 12 }}>Submission checklist</h3>
+                  <ul className="req-list">
+                    {r.submission_items.map((x, i) => (
+                      <li key={i}>
+                        <span className={`chip ${x.required ? "chip-accent" : "chip-neutral"}`} style={{ marginRight: 6 }}>{x.required ? "required" : "optional"}</span>
+                        {x.name}
+                        {x.notes && <span className="muted"> · {x.notes}</span>}
+                        <EvidenceList evidence={x.evidence} />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {r.contract_terms && r.contract_terms.length > 0 && (
+                <>
+                  <h3 style={{ marginTop: 12 }}>Commercial & contract terms</h3>
+                  <ul className="req-list">
+                    {r.contract_terms.map((x, i) => (
+                      <li key={i}>
+                        <strong>{x.topic}:</strong> {x.text}
+                        <EvidenceList evidence={x.evidence} />
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+          )}
 
           {/* ---------- deal-breakers & questions ---------- */}
           <section className="card" aria-labelledby="db-h">
@@ -255,6 +394,12 @@ export function Report({ report, onDownloadIcs }: { report: TriageReport; onDown
       <p className="small muted" style={{ marginTop: 14 }}>
         {r.document.fileName} · {r.document.pageCount} pages · analysed by {r.model.provider} ({r.model.name})
         {r.model.latencyMs ? ` in ${(r.model.latencyMs / 1000).toFixed(1)}s` : ""} · {new Date(r.generatedAt).toLocaleString()}
+        {r.usage && r.usage.input > 0 && (
+          <>
+            {" "}· {r.pipeline === "v2" ? "evidence-first pipeline" : "single-call pipeline"}, {r.usage.calls} model call{r.usage.calls > 1 ? "s" : ""}, {r.usage.input.toLocaleString()} input tokens
+            {r.usage.cached ? ` (${r.usage.cached.toLocaleString()} cached)` : ""}, {r.usage.output.toLocaleString()} output, {r.usage.thinking.toLocaleString()} thinking
+          </>
+        )}
       </p>
     </div>
   );

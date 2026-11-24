@@ -53,6 +53,9 @@ export const RequirementCategory = z.enum([
   "registration",
   "insurance_bonding",
   "technical",
+  "security_privacy",
+  "accessibility",
+  "contract_terms",
   "other",
 ]);
 
@@ -150,6 +153,25 @@ export interface ScoredFactor {
   reason: string;
 }
 
+export type ComplianceStatus = "compliant" | "non_compliant" | "partial" | "unknown" | "verify";
+
+export interface Addendum {
+  label: string; // "Addendum No. 1"
+  issued_date: string | null;
+  summary: string;
+  changes: { what: string; from: string | null; to: string | null }[];
+  acknowledgement_required: boolean;
+  evidence: VerifiedEvidence[];
+  confirmed: boolean; // a change statement for it was found in the document text
+}
+
+export interface QualityCheck {
+  id: string;
+  label: string;
+  status: "pass" | "warn" | "fail";
+  detail: string;
+}
+
 export type Verified<T extends { evidence: Evidence[] }> = Omit<T, "evidence"> & {
   evidence: VerifiedEvidence[];
   needsReview: boolean;
@@ -178,8 +200,14 @@ export interface TriageReport {
   solicitation_number: string;
   summary: string;
   facts: Record<FactKey, Verified<Fact>>;
-  deadlines: (Verified<Deadline> & { what: string })[]; // `what` mirrors the brief's example shape
-  requirements: Verified<Requirement>[];
+  deadlines: (Verified<Deadline> & { what: string; original_date?: string | null; revised_by?: string | null })[]; // `what` mirrors the brief's example shape
+  requirements: (Verified<Requirement> & {
+    id?: string;
+    values?: string | null;
+    basis?: "explicit" | "interpreted";
+    compliance?: ComplianceStatus;
+    compliance_reason?: string;
+  })[];
   reasons: string[];
   change_mind: string[];
   deal_breakers: Verified<z.infer<typeof DealBreakerSchema>>[];
@@ -188,4 +216,14 @@ export interface TriageReport {
 
   review_flags: ReviewFlag[];
   evidence_stats: { total: number; verified: number; approximate: number; unverified: number };
+
+  /* v2 pipeline additions (absent in v1 reports) */
+  pipeline?: "v1" | "v2";
+  addenda?: Addendum[];
+  evaluation_criteria?: Verified<{ name: string; points: number | null; notes: string | null; evidence: Evidence[] }>[];
+  award_basis?: Verified<Fact>;
+  submission_items?: Verified<{ name: string; required: boolean; notes: string | null; evidence: Evidence[] }>[];
+  contract_terms?: Verified<{ topic: string; text: string; evidence: Evidence[] }>[];
+  quality?: { status: "verified" | "needs_review" | "incomplete"; checks: QualityCheck[] };
+  usage?: { calls: number; input: number; output: number; thinking: number; cached: number; ms: number; byTask: { task: string; model: string; provider: string; ms: number; input: number; output: number; thinking: number; cached: number }[] };
 }

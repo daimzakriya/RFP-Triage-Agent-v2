@@ -139,7 +139,7 @@ describe("backup provider (mocked network)", () => {
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp2) }, finish_reason: "stop" }] }), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const report = await analyzeDocument(pages, "rfp2.pdf");
+    const report = await analyzeDocument(pages, "rfp2.pdf", undefined, "v1");
     delete process.env.FALLBACK_API_KEY;
     delete process.env.GEMINI_RETRY_BUDGET_MS;
     expect(report.decision).toBe("NO_BID");
@@ -156,7 +156,7 @@ describe("backup provider (mocked network)", () => {
       .mockResolvedValueOnce(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp2) } }] }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
     const p = callOpenAICompat("s", "u");
-    await vi.advanceTimersByTimeAsync(2_500);
+    await vi.advanceTimersByTimeAsync(6_000);
     const res = await p;
     vi.useRealTimers();
     delete process.env.FALLBACK_API_KEY;

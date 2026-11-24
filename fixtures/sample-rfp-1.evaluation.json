@@ -1,0 +1,26 @@
+{
+  "evaluation_criteria": [
+    { "name": "Technical approach and understanding of DPI's needs", "points": 30, "notes": null, "evidence": [{ "page": 11, "quote": "Technical approach and understanding of DPI’s needs 30" }] },
+    { "name": "Relevant experience and references", "points": 20, "notes": null, "evidence": [{ "page": 11, "quote": "Relevant experience and references 20" }] },
+    { "name": "Cost", "points": 20, "notes": "Lowest total price gets 20 points; others (lowest ÷ price) × 20.", "evidence": [{ "page": 11, "quote": "The lowest total price (Attachment C) receives 20 points." }] },
+    { "name": "Key personnel", "points": 15, "notes": null, "evidence": [{ "page": 11, "quote": "Key personnel 15" }] },
+    { "name": "Implementation plan and schedule", "points": 10, "notes": null, "evidence": [{ "page": 11, "quote": "Implementation plan and schedule 10" }] },
+    { "name": "Responsible AI and security approach", "points": 5, "notes": null, "evidence": [{ "page": 11, "quote": "Responsible AI and security approach 5" }] },
+    { "name": "Finalist demonstration (separate)", "points": 25, "notes": "Up to 25 points, added to the written score for finalists.", "evidence": [{ "page": 11, "quote": "Finalist demonstration (separate) up to 25" }] }
+  ],
+  "award_basis": { "value": "Best overall value (written score plus demonstration score), not necessarily the lowest price.", "status": "stated", "note": null, "evidence": [{ "page": 11, "quote": "The City will award to the Proposer whose proposal offers the best overall value, which may not be the lowest price." }] },
+  "submission_items": [
+    { "name": "Proposal PDF (Tabs 1–8, max 30 pages)", "required": true, "notes": "Text-searchable, via Port Alder Bids.", "evidence": [{ "page": 10, "quote": "Submit one text-searchable PDF of no more than 30 pages (excluding attachments and the cost proposal)" }] },
+    { "name": "Attachment A — Proposer Information and Certification", "required": true, "notes": "Includes Small Business self-certification and addendum acknowledgement.", "evidence": [{ "page": 10, "quote": "Proposers must self-certify on Attachment A." }] },
+    { "name": "Attachment B — References", "required": true, "notes": null, "evidence": [{ "page": 10, "quote": "8 Attachments A, B, D and E, and sample security documentation." }] },
+    { "name": "Attachment C — Cost Proposal Form", "required": true, "notes": "Separate file; no pricing elsewhere.", "evidence": [{ "page": 10, "quote": "Submit the cost proposal (Attachment C) as a separate file." }] },
+    { "name": "Attachment D — Requirements Response Matrix", "required": true, "notes": "Not counted in page limit.", "evidence": [{ "page": 10, "quote": "Complete Attachment D (not counted in page" }] },
+    { "name": "Attachment E — Security and Data Questionnaire", "required": true, "notes": null, "evidence": [{ "page": 10, "quote": "8 Attachments A, B, D and E, and sample security documentation." }] }
+  ],
+  "contract_terms": [
+    { "topic": "Budget / not-to-exceed", "text": "$420,000 for implementation (Phases 1–4) plus the first two years of subscription, hosting and support; proposals over it are rejected.", "evidence": [{ "page": 11, "quote": "Proposals over the $420,000 not-to-exceed amount will be rejected." }] },
+    { "topic": "Payment and retainage", "text": "Implementation paid by milestone after acceptance, net 30; 10% of each milestone withheld until final acceptance of Phase 3; subscription paid annually in advance.", "evidence": [{ "page": 12, "quote": "The City withholds 10% of each milestone payment until final acceptance of Phase 3." }] },
+    { "topic": "Term", "text": "Three years from Notice to Proceed with two optional one-year renewals.", "evidence": [{ "page": 12, "quote": "Term: three (3) years from Notice to Proceed, with two optional one-year renewals" }] },
+    { "topic": "Exceptions to terms", "text": "Exceptions must be listed in Tab 7; unlisted exceptions are waived.", "evidence": [{ "page": 10, "quote": "Exceptions not listed here are waived." }] }
+  ]
+}

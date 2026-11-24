@@ -1,5 +1,5 @@
 {
-  "_about": "Ground truth for the two challenge sample RFPs, read by hand from the PDFs. Used by `npm run eval` to check the agent's dates and decision.",
+  "_about": "Ground truth for the two challenge sample RFPs, read by hand from the PDFs. Used only by the benchmark (`npm run bench`, `npm run eval`) to score the agent. Nothing here is used by the application. Each term may list alternatives separated by |.",
   "samples/Sample-RFP-1-Port-Alder-Permit-Automation.pdf": {
     "decision": "BID",
     "minScore": 6,
@@ -9,7 +9,32 @@
       "site_visit": null,
       "work_start": "2027-03-22"
     },
-    "mustMentionRequirements": ["small business", "three (3) years", "washington", "soc 2", "wcag", "project manager", "$2,000,000|$2m|$2 million"]
+    "addendum": { "deadline": "proposal_due", "original": "2027-01-08", "revised": "2027-01-15", "label": "addendum no. 1" },
+    "requirementTerms": [
+      "small business",
+      "three (3) years|3 years|three years",
+      "two (2) projects|two projects|2 projects|at least two",
+      "washington|ubi",
+      "project manager",
+      "soc 2",
+      "wcag",
+      "$2,000,000|$2m|$2 million",
+      "single sign-on|sso|saml",
+      "99.5",
+      "spanish",
+      "permitcore",
+      "50%"
+    ],
+    "evaluationCriteria": [
+      { "name": "technical approach", "points": 30 },
+      { "name": "experience|references", "points": 20 },
+      { "name": "cost|price", "points": 20 },
+      { "name": "key personnel", "points": 15 },
+      { "name": "implementation", "points": 10 },
+      { "name": "responsible ai|security approach", "points": 5 }
+    ],
+    "submissionTerms": ["attachment a", "attachment b", "attachment c", "attachment d", "attachment e"],
+    "commercialTerms": ["$420,000|420,000", "10%"]
   },
   "samples/Sample-RFP-2-Larkspur-County-Janitorial.pdf": {
     "decision": "NO_BID",
@@ -21,6 +46,19 @@
       "site_visit": "2026-12-03",
       "work_start": "2027-02-01"
     },
-    "mustMentionRequirements": ["five (5) years", "30 miles", "fingerprint", "bond", "living wage|$17.25"]
+    "addendum": null,
+    "requirementTerms": [
+      "five (5) years|5 years|five years",
+      "30 miles",
+      "fingerprint",
+      "bond",
+      "living wage|$17.25",
+      "green seal",
+      "25,000"
+    ],
+    "evaluationCriteria": [],
+    "awardTerms": ["lowest"],
+    "submissionTerms": ["form 1", "form 2", "form 3", "form 4", "form 5", "form 6", "form 7"],
+    "commercialTerms": ["deduct", "performance bond|100%"]
   }
 }

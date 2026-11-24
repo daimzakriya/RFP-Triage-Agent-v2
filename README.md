@@ -40,47 +40,81 @@ A second, smaller extra is the **source viewer**. Click any `p.5 ✓` badge to o
 
 ## How it works
 
+Two pipelines share the same UI, report format and checks. **v2 is the default**. Setting `PIPELINE=v1` switches back to the original single-call design, which is kept so the two can be benchmarked against each other.
+
+### v2: evidence-first pipeline (default)
+
 ```
-Browser                                   Server (Vercel function, 300 s max)
-───────                                   ─────────────────────────────────
-PDF ──► unpdf (pdf.js) reads every page   POST /api/analyze { fileName, pages[] }
-        • checks it is a real PDF,            │ validate size / page count (zod)
-          ≤30 MB, ≤150 pages                  ▼
-        • rejects scanned PDFs             Gemini 3.8 Flash, low thinking, 
-        • strips logo/seal noise           JSON schema enforced (responseSchema)
-        ──── page text (JSON) ────►           │
-                                              ▼
-                                           zod validation of the model answer
-                                              ▼
-                                           Deterministic checks (lib/verify.ts)
-                                           • every quote searched for on its page
-                                           • every date must be written in its source
-                                           • lines with 2+ dates → "revised date?" flag
-                                           • addendum detector
-                                           • requirement coverage check
-                                           • missing key dates → "Not stated"
-                                              ▼
-                                           Scoring and decision rule (lib/score.ts)
-Report ◄──────────── TriageReport JSON ──────┘
+Browser                              Server (Vercel function, 300 s max)
+───────                              ───────────────────────────────────────────────────────────
+PDF ─► unpdf reads every page        0. Deterministic preprocessing (no model)
+       (≤30 MB, ≤150 pages,             • token estimate → whole document to every worker (≤60k tokens)
+        scanned PDFs rejected)            or section-routed pages (larger docs); every page assigned
+       ── page text ──►                 • addendum scanner: explicit "changed/extended from X to Y" statements
+                                     1. Three narrow extraction workers, in parallel (Gemini Flash-Lite)
+                                        • schedule: facts, all dates, addenda (original + revised dates)
+                                        • requirements: every must/shall item with category, exact values,
+                                          mandatory flag, explicit vs interpreted
+                                        • evaluation: scored criteria + points, award basis,
+                                          submission items/attachments, commercial terms
+                                        same system prompt + document prefix → implicit cache hits
+                                        each answer: JSON schema enforced, then zod-validated;
+                                        a failed/invalid worker is retried once on its own
+                                     2. Deterministic consolidation (no model)
+                                        • every quote searched for on its page (verify.ts)
+                                        • duplicate requirements merged, stable IDs R1…Rn
+                                        • dates reconciled with change statements: a revision is accepted
+                                          only with textual evidence; both dates kept
+                                        • coverage check for insurance/bonds/wages/clearances…
+                                     3. Reasoning (Gemini Flash) over the full compliance dataset,
+                                        not a summary: compliance per requirement ID
+                                        (compliant / non_compliant / partial / unknown / verify),
+                                        rubric scores, reasons citing IDs
+                                     4. Deterministic scoring: clamps, eligibility caps from compliance,
+                                        decision rule, non-compliant mandatory items become blockers
+                                     5. Quality gate: 10 checks (pages read, tasks done, evidence for
+Report ◄── TriageReport JSON ────────   mandatory items, dates cited, addenda applied, no unsupported
+                                        items, every requirement assessed, decision consistent)
 ```
+
+**Why v2 replaced the single call.** Benchmarking v1 on live models surfaced these root causes (details in "Benchmark" below):
+
+1. **No place for some answers.** v1's schema had no fields for evaluation criteria, submission items/attachments, award basis or addendum structure. The revised date survived only as free text in a note, so the original date was lost.
+2. **One prompt did everything.** Extraction, judgement and summary competed in a single answer. On the free Flash-Lite model, requirement coverage dropped: 23–24 quotes against 43 for a stronger model, and insurance limits and wage rules were missed in early runs.
+3. **The score could contradict the evidence.** The same call that extracted requirements also scored eligibility, giving 9/10 for Port Alder while minimum qualifications (3 years, two public-sector projects, insurance) were still unconfirmed.
+4. **No measurement.** There was no token logging and no saved output, so quality changes couldn't be compared.
+
+**Retention between stages.** Workers return validated structured data. The reasoning step receives every requirement (ID, category, mandatory flag, exact text and values, pages, whether its quote was verified), every date with original/revised values, the addenda, criteria and terms. Its compliance judgements are mapped back onto the original requirements by ID, so evidence never passes through a model a second time.
+
+**Addenda.** The scanner finds sentences with a change verb and two dates (`extended from January 8, 2027 to January 15, 2027`) and the addendum label before them. A date counts as superseded only when such a statement exists. If the model reports the old date, it is corrected and flagged. If the model claims a revision with no supporting statement, the claim is flagged for human verification. A later date elsewhere in the PDF is never treated as a revision.
+
+### v1: single call (kept for comparison)
+
+One Gemini call returns the whole report; the same verification, coverage and scoring code runs afterwards.
 
 **Why the PDF is read in the browser:** Vercel's free functions accept request bodies of up to 4.5 MB, and a 100-page RFP with drawings can be much bigger. Sending only the text (about 370 KB for 100 dense pages) avoids that limit. It also gives instant errors for bad files, and the page text stays in the browser for the source viewer.
 
-**Why one model call, not an agent framework:** the brief wants a trustworthy answer in about a minute. A single long-context call sees the whole RFP at once, including the appendices, where addenda and insurance terms hide. Deterministic code then checks the answer. A multi-step agent loop would add latency and cost without improving accuracy. The "agent" part is reading, judging, verifying itself and flagging what it isn't sure about.
+### Model choice
 
-### Model choice: Google Gemini 3.8 Flash
+| Role | Models, in order (configurable) | Why |
+|---|---|---|
+| Extraction workers | `gemini-3.5-flash-lite` → `gemini-3.8-flash` → `gemini-3.7-flash` (`EXTRACT_MODELS`) | 3 calls per RFP; Flash-Lite has the largest free quota (500 requests/day) and good literal extraction |
+| Reasoning | `gemini-3.8-flash` → `gemini-3.7-flash` → `gemini-3.5-flash-lite` (`REASON_MODELS`) | 1 call per RFP on a small structured input; benefits most from the stronger model (free quota ~20/day, then falls back) |
+| Backup provider | `mistral-small-latest` via `FALLBACK_API_KEY` | used only when every Gemini model is busy or out of quota; calls are spaced ≥1.2 s apart for Mistral's 1 request/second free limit |
+
+Thinking: `low` for extraction (literal work), `medium` for reasoning. Gemini 2.5 models are no longer offered to new API keys; a retired model (HTTP 404) is skipped automatically.
 
 - **Free with no card.** You get an API key from Google AI Studio in one minute.
 - **1M-token context.** A 100-page RFP (about 100k tokens) fits in one request, so nothing is chunked and nothing is missed.
 - **Native structured output.** `responseSchema` makes the model return JSON in our exact shape, and zod validates it again on the server.
-- **Fast enough.** In live runs on the two samples the reports took 35–47 s. When Google's free tier is overloaded it can be slower, so the function is allowed 300 s (the Vercel Hobby limit with Fluid compute). Thinking level `low` gives better judgement on dates and requirements without slowing it down much. (`gemini-2.5-flash` is no longer offered to new API keys, so the code also handles a retired model by moving to the next one.)
+- **Fast enough.** In v1 live runs the reports took 35–51 s. v2 makes 4 calls (3 in parallel), so expect a similar or slightly longer time; `npm run bench` measures it. When Google's free tier is overloaded it can be slower, so the function is allowed 300 s (the Vercel Hobby limit with Fluid compute). Thinking level `low` gives better judgement on dates and requirements without slowing it down much. (`gemini-2.5-flash` is no longer offered to new API keys, so the code also handles a retired model by moving to the next one.)
 - **Automatic fallback.** If the main model is rate-limited (429), busy (503) or retired (404), it waits briefly and retries once (quota errors skip straight on), then tries `gemini-3.5-flash-lite` (500 requests/day on the free tier) and `gemini-3.7-flash`. Each attempt is capped at 90 s so an overloaded model can't stall the report. If a model rejects an optional setting (400), it retries once with only the essential settings.
 - **Second provider when Gemini is busy.** Google's free tier is often overloaded (HTTP 503) or out of daily quota. If `FALLBACK_API_KEY` is set, the app switches to Mistral's free API (`mistral-small-latest`, OpenAI-compatible, long context) after one short retry. The report says which provider produced it, and the same schema validation and evidence checks apply. See `lib/openai-compat.ts`.
 - **Alternatives considered.** Groq's free tier is faster, but its tokens-per-minute limit is too low for a 100-page document in one call. GitHub Models has smaller context limits. Self-hosted models need paid GPUs.
 
 ### How the fit score and decision are made
 
-The model scores five factors and gives a one-line reason for each. The code clamps the points, adds them up and applies the rule, so the number can't drift from its explanation.
+The reasoning model scores five factors and gives a one-line reason for each. The code clamps the points, adds them up and applies the rule, so the number can't drift from its explanation. In v2 the eligibility factor is also capped by the compliance findings: 1.5 if any mandatory eligibility item is unconfirmed, 1 if three or more are, and 0 if a mandatory item is judged non-compliant. That item then becomes a blocking deal-breaker.
 
 | Factor | Max | What it measures |
 |---|---|---|
@@ -104,15 +138,27 @@ The model scores five factors and gives a one-line reason for each. The code cla
 | None missed | The prompt sweeps a fixed checklist (insurance limits, bonds, wages, clearances, set-asides, certifications…). A code check then flags any of those topics that appear in the PDF but are missing from the extracted requirements, with page numbers. |
 | Fast no-bid for work that isn't ours | Service-match gate and score cap (above). |
 
-## Results on the two sample RFPs
+## Benchmark
 
 | | Port Alder permit automation (17 pp.) | Larkspur janitorial (12 pp.) |
 |---|---|---|
 | Expected decision | **BID**: core AI/automation work, Small Business set-aside | **NO_BID** (fast): janitorial, not software |
-| Traps the agent must catch | The proposal due date is printed as both Jan 8 and Jan 15, 2027; Addendum No. 1 sets **Jan 15, 3:00 PM Pacific**. There is no site visit. The $420k cap covers only 2 of the 3 contract years. | **Mandatory** site walk on Dec 3, 2026 (non-attendees are rejected); sealed paper bids only; contract value not stated |
-| Ground truth | `evals/expected.json` | `evals/expected.json` |
+| Traps | Proposal due printed as both Jan 8 and Jan 15, 2027; Addendum No. 1 sets **Jan 15, 3:00 PM Pacific**. No site visit. $420k cap covers 2 of 3 years. Six weighted criteria (30/20/20/15/10/5) plus a 25-point demo. Attachments A–E. | **Mandatory** site walk on Dec 3, 2026; sealed paper bids; no contract value; award to lowest responsive bidder; Forms 1–7 |
 
-`npm run eval` runs the full pipeline on both PDFs and checks the decision, score range, all four key dates, required requirement terms, that every quote is found in the PDF, and that it finishes in about a minute (90 s or less).
+`evals/expected.json` holds the hand-checked ground truth. It's used only by the benchmark, never by the app. `npm run bench` runs v1 and v2 on both PDFs with live models and scores each run:
+
+- the decision and score range
+- the four key dates
+- the addendum: original date, revised date and the addendum named
+- recall of key requirement terms
+- the evaluation criteria with their points
+- submission items and commercial terms
+- the share of quotes found in the PDF (a hallucination proxy)
+- the quality status, model calls, input/cached/output/thinking tokens, and time
+
+Full reports and a `summary.md` comparison are saved under `evals/runs/<timestamp>/`.
+
+Results are recorded in `evals/RESULTS.md`.
 
 ## Run it locally
 
@@ -129,9 +175,12 @@ Get a key at <https://aistudio.google.com/app/apikey> (free, no card).
 Useful scripts:
 
 ```bash
-npm test                 # 33 unit tests: PDF reading, quote/date verification, scoring, Gemini client (mocked)
-npm run eval             # live run on both sample RFPs against the ground truth (uses your key)
-npm run eval -- --fixture  # same checks offline, using recorded answers
+npm test                     # 50 unit tests: PDF reading, quote/date checks, addendum scanner, dedupe,
+                             # scoring caps, worker retry, hallucination flagging, clients (mocked)
+npm run bench                # live: v1 (baseline) vs v2 on both samples, saves reports + summary.md
+npm run bench -- --samples=1 # Port Alder only (fewer requests)
+npm run eval                 # live: v2 only, non-zero exit if any check fails
+npm run bench -- --fixture   # offline plumbing check with recorded answers (not a model benchmark)
 npm run typecheck
 npm run build
 npx tsx scripts/dump-pages.ts samples/Sample-RFP-1-Port-Alder-Permit-Automation.pdf   # see the text the model sees
@@ -157,7 +206,13 @@ app/page.tsx                 UI: upload, progress, Bid Desk, report / JSON tabs
 app/api/analyze/route.ts     POST endpoint: validation, rate limit, timeout
 components/                  Report, BidDesk, Evidence badges, SourceViewer
 lib/pdf.ts                   PDF reading and cleaning (browser + Node)
-lib/prompt.ts                System prompt with ground rules and rubric
+lib/pipeline/preprocess.ts   Token estimate, page routing, addendum change-statement scanner
+lib/pipeline/workers.ts      Extraction worker prompts + schemas (schedule, requirements, evaluation)
+lib/pipeline/consolidate.ts  Dedupe + IDs, addendum reconciliation, compliance-based score caps
+lib/pipeline/reason.ts       Reasoning prompt/schema over the compliance dataset
+lib/pipeline/index.ts        v2 orchestration, retries, quality gate, usage accounting
+lib/pipeline/llm.ts          Model router: Gemini → backup, usage logging, fixture hook
+lib/prompt.ts                v1 single-call prompt
 lib/gemini.ts                Gemini REST client, response schema, model fallback
 lib/openai-compat.ts         Backup provider (Mistral or any OpenAI-compatible API)
 lib/schema.ts                zod schema for the model answer and report types
@@ -165,7 +220,8 @@ lib/verify.ts                Quote search, date checks, addendum detection
 lib/score.ts                 Rubric, score cap, decision rule
 lib/desk.ts, lib/ics.ts      Bonus feature: ranking and calendar export
 lib/profile.ts               idiaz.io profile (from the brief) and the list of unknowns
-evals/expected.json          Hand-checked ground truth for the samples
+evals/expected.json          Hand-checked ground truth for the samples (benchmark only)
+scripts/bench.ts             Benchmark / eval runner
 fixtures/                    Recorded model answers (tests / offline mode only)
 tests/                       Vitest unit tests
 ```
@@ -177,6 +233,9 @@ tests/                       Vitest unit tests
 - **Free-tier quota.** Gemini's free tier is small: about 20 requests a day for Gemini 3.8 Flash and 500 for 3.5 Flash-Lite, resetting at midnight Pacific. When a model's quota is used up, the app moves to the next model at once and says so in plain words if all are exhausted. Google may use free-tier prompts to improve its products, so use the paid tier for confidential RFPs.
 - **The fit score is only as good as the profile.** The profile in the brief is short, so unknowns become "verify" items rather than guesses.
 - **The Bid Desk is stored per browser.** There's no sharing between teammates without a backend, which the brief puts out of scope.
+- **More model calls per RFP in v2.** Four calls instead of one; with Flash's ~20 requests/day free limit, the reasoning step falls back to Flash-Lite after about 20 analyses a day.
+- **Implicit caching is best-effort.** Gemini decides when to serve the shared document prefix from cache; the footer and benchmark show the cached token count actually achieved.
+- **Long-document routing is keyword-based.** Documents over ~60k tokens are routed by section signals; any page no worker claims goes to the requirements worker, so nothing is skipped, but a fact on an unusual page may reach a less relevant worker.
 - **The rate limiter is per serverless instance.** It's a guard for a demo link, not a security control.
 
 ## Assumptions

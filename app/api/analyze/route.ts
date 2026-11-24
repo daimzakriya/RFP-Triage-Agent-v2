@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { analyzeDocument, buildReport } from "@/lib/analyze";
+import { analyzeDocument, buildReport, defaultPipeline } from "@/lib/analyze";
+import { setFixtureProvider } from "@/lib/pipeline/llm";
 import { LlmError } from "@/lib/gemini";
 import { LIMITS } from "@/lib/limits";
-import { findFixture } from "@/lib/fixtures";
+import { findFixture, v2Fixture } from "@/lib/fixtures";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // Vercel Hobby with Fluid compute (default for new projects) allows up to 300 s
@@ -43,15 +44,24 @@ export async function POST(req: Request) {
   }
   if (chars < 500) return error("There is too little text in this document to analyse.", 422);
 
-  // Offline test mode (never enable in production): replays a recorded model
-  // answer for the two challenge sample RFPs so the pipeline can be exercised without an API key.
+  // Offline test mode (never enable in production): replays recorded model answers for the two
+  // challenge sample RFPs so the whole pipeline can be exercised without an API key.
   if (process.env.RFP_FIXTURE_MODE === "1") {
     const fx = findFixture(body.pages);
     if (fx) {
       await new Promise((r) => setTimeout(r, 1200));
-      return NextResponse.json(
-        buildReport({ pages: body.pages, fileName: body.fileName, modelJson: fx.json, model: { provider: "Fixture (offline test mode)", name: fx.name, latencyMs: 0 } }),
-      );
+      if (defaultPipeline() === "v1") {
+        return NextResponse.json({
+          ...buildReport({ pages: body.pages, fileName: body.fileName, modelJson: fx.json, model: { provider: "Fixture (offline test mode)", name: fx.name, latencyMs: 0 } }),
+          pipeline: "v1",
+        });
+      }
+      setFixtureProvider(v2Fixture);
+      try {
+        return NextResponse.json(await analyzeDocument(body.pages, body.fileName, undefined, "v2"));
+      } finally {
+        setFixtureProvider(null);
+      }
     }
   }
 

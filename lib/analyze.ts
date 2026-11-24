@@ -1,5 +1,6 @@
 import { callGemini, LlmError, type LlmResult } from "./gemini";
 import { callOpenAICompat, fallbackConfigured } from "./openai-compat";
+import { runPipelineV2 } from "./pipeline";
 import { systemPrompt, userPrompt } from "./prompt";
 import { ModelOutputSchema, type FactKey, type ModelOutput, type ReviewFlag, type TriageReport } from "./schema";
 import { decide, scoreFactors } from "./score";
@@ -98,7 +99,26 @@ export function buildReport(args: {
   };
 }
 
-export async function analyzeDocument(pages: string[], fileName: string, signal?: AbortSignal): Promise<TriageReport> {
+export type PipelineVersion = "v1" | "v2";
+
+export function defaultPipeline(): PipelineVersion {
+  return process.env.PIPELINE === "v1" ? "v1" : "v2";
+}
+
+/** Entry point. v2 (default) = multi-stage, evidence-first pipeline; v1 = original single call (kept for comparison). */
+export async function analyzeDocument(
+  pages: string[],
+  fileName: string,
+  signal?: AbortSignal,
+  pipeline: PipelineVersion = defaultPipeline(),
+): Promise<TriageReport> {
+  if (pipeline === "v2") return runPipelineV2(pages, fileName, signal);
+  const report = await analyzeDocumentV1(pages, fileName, signal);
+  return { ...report, pipeline: "v1" };
+}
+
+async function analyzeDocumentV1(pages: string[], fileName: string, signal?: AbortSignal): Promise<TriageReport> {
+  const t0 = Date.now();
   const system = systemPrompt();
   const user = userPrompt(pages);
   const backup = fallbackConfigured();
@@ -119,5 +139,7 @@ export async function analyzeDocument(pages: string[], fileName: string, signal?
       throw new LlmError(`${first} The backup model also failed: ${(err2 as Error).message}`, (err2 as LlmError).status ?? 503);
     }
   }
-  return buildReport({ pages, fileName, modelJson: res.json, model: { provider, name: res.model, latencyMs: res.latencyMs } });
+  const report = buildReport({ pages, fileName, modelJson: res.json, model: { provider, name: res.model, latencyMs: res.latencyMs } });
+  const u = res.usage ?? { input: 0, output: 0, thinking: 0, cached: 0 };
+  return { ...report, usage: { calls: 1, ...u, ms: Date.now() - t0, byTask: [{ task: "single", model: res.model, provider, ms: res.latencyMs, ...u }] } };
 }

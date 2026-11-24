@@ -214,3 +214,13 @@ footer.foot { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--l
 .desk .title-btn { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .desk td:nth-child(4), .desk td:nth-child(3) { white-space: nowrap; }
 @media (max-width: 640px) { .topbar > .label { display: none; } }
+
+/* v2 pipeline additions */
+.qc { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.qc li { display: flex; gap: 8px; align-items: flex-start; }
+.qc li > span:first-child { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; flex: none; }
+.qc-pass > span:first-child { background: var(--bid-soft); color: var(--bid); }
+.qc-warn > span:first-child { background: var(--warn-soft); color: var(--warn); }
+.qc-fail > span:first-child { background: var(--nobid-soft); color: var(--nobid); }
+.req-id { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-right: 6px; }
+.timeline .date small.was { color: var(--ink-3); font-weight: 400; }

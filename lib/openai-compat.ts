@@ -28,12 +28,31 @@ export function toJsonSchema(node: any): any {
   return out;
 }
 
-export async function callOpenAICompat(system: string, user: string, signal?: AbortSignal): Promise<LlmResult> {
+// Free tiers allow about one request per second: serialize backup calls and space them out.
+let queue: Promise<unknown> = Promise.resolve();
+let lastCallAt = 0;
+function throttled<T>(fn: () => Promise<T>): Promise<T> {
+  const run = queue.then(async () => {
+    const wait = Math.max(0, lastCallAt + 1_200 - Date.now());
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    lastCallAt = Date.now();
+    return fn();
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+export async function callOpenAICompat(
+  system: string,
+  user: string,
+  signal?: AbortSignal,
+  opts: { schema?: object } = {},
+): Promise<LlmResult> {
   const key = process.env.FALLBACK_API_KEY || process.env.MISTRAL_API_KEY;
   if (!key) throw new LlmError("No backup model is configured.", 503);
   const base = (process.env.FALLBACK_BASE_URL || "https://api.mistral.ai/v1").replace(/\/$/, "");
   const model = process.env.FALLBACK_MODEL || "mistral-small-latest";
-  const schema = toJsonSchema(GEMINI_RESPONSE_SCHEMA);
+  const schema = toJsonSchema(opts.schema ?? GEMINI_RESPONSE_SCHEMA);
 
   // Plain JSON mode is supported by every OpenAI-compatible provider; the schema is spelled out in the
   // prompt and zod validates the answer. Free tiers allow ~1 request/second, so on 429 we wait and retry.
@@ -43,7 +62,7 @@ export async function callOpenAICompat(system: string, user: string, signal?: Ab
     const started = Date.now();
     let res: Response;
     try {
-      res = await fetch(`${base}/chat/completions`, {
+      res = await throttled(() => fetch(`${base}/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
         signal,
@@ -60,7 +79,7 @@ export async function callOpenAICompat(system: string, user: string, signal?: Ab
             { role: "user", content: user },
           ],
         }),
-      });
+      }));
     } catch (err) {
       if (signal?.aborted) throw new LlmError("The analysis timed out.", 504);
       throw new LlmError(`Could not reach the backup model (${(err as Error).message}).`, 503);
@@ -87,7 +106,13 @@ export async function callOpenAICompat(system: string, user: string, signal?: Ab
     const data = await res.json();
     const text: string = data?.choices?.[0]?.message?.content ?? "";
     try {
-      return { json: JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")), model, latencyMs: Date.now() - started };
+      const u = data?.usage ?? {};
+      return {
+        json: JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, "")),
+        model,
+        latencyMs: Date.now() - started,
+        usage: { input: u.prompt_tokens ?? 0, output: u.completion_tokens ?? 0, thinking: u.completion_tokens_details?.reasoning_tokens ?? 0, cached: u.prompt_tokens_details?.cached_tokens ?? 0 },
+      };
     } catch {
       problems.push(`${model}: answer was not valid JSON (finish reason ${data?.choices?.[0]?.finish_reason})`);
       break;

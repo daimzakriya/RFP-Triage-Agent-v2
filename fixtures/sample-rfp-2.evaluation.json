@@ -1,0 +1,16 @@
+{
+  "evaluation_criteria": [],
+  "award_basis": { "value": "Lowest responsive and responsible bidder after applying the 5% local business preference.", "status": "stated", "note": null, "evidence": [{ "page": 8, "quote": "The contract will be awarded to the lowest responsive and responsible bidder, after applying the local business" }] },
+  "submission_items": [
+    { "name": "Form 1 — Bid Form", "required": true, "notes": "Monthly prices for each facility.", "evidence": [{ "page": 7, "quote": "1. Completed Bid Form (Form 1) with monthly prices for each facility." }] },
+    { "name": "Form 2 — Company experience, staffing plan and supervisor details", "required": true, "notes": null, "evidence": [{ "page": 7, "quote": "2. Company experience, staffing plan and supervisor details (Form 2)." }] },
+    { "name": "Form 3 — References", "required": true, "notes": "Three facilities of 25,000 sq. ft. or more.", "evidence": [{ "page": 7, "quote": "3. Three references for facilities of 25,000 sq. ft. or more (Form 3)." }] },
+    { "name": "Form 4 — MBE/WBE good-faith effort statement", "required": true, "notes": null, "evidence": [{ "page": 7, "quote": "4. MBE/WBE good-faith effort statement (Form 4)." }] },
+    { "name": "Form 5 — Non-Collusion Affidavit (notarized)", "required": true, "notes": null, "evidence": [{ "page": 7, "quote": "5. Signed Non-Collusion Affidavit (Form 5), notarized." }] },
+    { "name": "Forms 6 and 7 — Drug-Free Workplace Certification; Personal Property Tax affidavit", "required": true, "notes": null, "evidence": [{ "page": 7, "quote": "6. Drug-Free Workplace Certification (Form 6) and Affidavit of Personal Property Tax Status (Form 7)." }] }
+  ],
+  "contract_terms": [
+    { "topic": "Payment and deductions", "text": "Monthly in arrears, net 30; the County may deduct for missed or deficient work.", "evidence": [{ "page": 8, "quote": "The County may deduct for missed or deficient work recorded in monthly inspections." }] },
+    { "topic": "Performance bond", "text": "100% of the annual contract price within 10 days of award.", "evidence": [{ "page": 7, "quote": "Performance bond: 100% of the annual contract price, within 10 days of award." }] }
+  ]
+}
