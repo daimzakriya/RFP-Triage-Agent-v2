@@ -90,12 +90,14 @@ export function sumUsage(rs: { usage: LlmUsage }[]): LlmUsage {
  * reserved for the single reasoning call per RFP.
  */
 export function extractionModels(): string[] {
-  // High-throughput extraction: two Flash-Lite models, 15 RPM / 500 RPD each. 3.8 Flash is never used here.
-  return list(process.env.EXTRACT_MODELS, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+  // High-throughput extraction: two Flash-Lite models (15 RPM / 500 RPD each). If both are
+  // overloaded, overflow to the regular Flash models, which run on separate capacity and have
+  // their own quotas (5 RPM / 20 RPD each). 3.8 Flash is never used here; it is kept for reasoning.
+  return list(process.env.EXTRACT_MODELS, ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.6-flash", "gemini-3-flash-preview"]);
 }
 export function reasoningModels(): string[] {
   // Final evaluation: 3.8 Flash when available (5 RPM / 20 RPD), otherwise the Flash-Lite models.
-  return list(process.env.REASON_MODELS, ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
+  return list(process.env.REASON_MODELS, ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]);
 }
 function list(env: string | undefined, dflt: string[]) {
   const v = (env ?? "").split(",").map((s) => s.trim()).filter(Boolean);
