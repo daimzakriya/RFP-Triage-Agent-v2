@@ -148,7 +148,7 @@ describe("backup provider (mocked network)", () => {
       const body = JSON.parse(init.body as string);
       expect(url).toBe("https://api.mistral.ai/v1/chat/completions");
       expect((init.headers as Record<string, string>).Authorization).toBe("Bearer m");
-      expect(body.model).toBe("mistral-small-latest");
+      expect(body.model).toBe("mistral-large-2512");
       expect(body.response_format.type).toBe("json_object");
       return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(rfp2) }, finish_reason: "stop" }] }), { status: 200 });
     });
