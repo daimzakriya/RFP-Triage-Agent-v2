@@ -18,7 +18,7 @@ export default function Sidebar({ reports, route, go, onRemove, job, queued, dar
       {/* brand */}
       <div className={cn("relative flex items-center h-14 shrink-0", c ? "justify-center px-0" : "px-4 gap-2.5")}>
         <Mark />
-        {!c && <div className="leading-tight min-w-0"><div className="font-semibold text-[14.5px] tracking-[-0.01em]">idiaz.io</div><div className="text-[11.5px] text-side-ink-3">Bid workspace</div></div>}
+        {!c && <div className="leading-tight min-w-0"><div className="font-bold text-[15.5px] tracking-[-0.02em]">Wyn<span className="text-[#c6f432]">Bid</span></div><div className="text-[11.5px] text-side-ink-3">Bid workspace</div></div>}
         {!c && (mobile
           ? <button onClick={onClose} aria-label="Close navigation" className="ml-auto p-1.5 rounded-md text-side-ink-2 hover:bg-side-2 cursor-pointer"><X size={17} /></button>
           : <Tip content="Collapse sidebar"><button onClick={() => setCollapsed(true)} aria-label="Collapse sidebar" className="ml-auto p-1.5 rounded-md text-side-ink-3 hover:text-side-ink hover:bg-side-2 cursor-pointer"><PanelLeftClose size={16} /></button></Tip>)}
@@ -99,13 +99,14 @@ function Item({ c, icon: Icon, label, hint, active, onClick }) {
   return c ? <Tip content={`${label} (${hint})`} side="right">{btn}</Tip> : btn;
 }
 
+/* WynBid mark: a rising "W" on a navy tile. */
 function Mark() {
   return (
-    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true" className="shrink-0">
-      <rect width="30" height="30" rx="8.5" fill="#ffd23f" />
-      <rect x="7.5" y="8" width="15" height="2.2" rx="1.1" fill="#1a1500" opacity=".35" />
-      <rect x="6.5" y="12.6" width="13" height="4.8" rx="1.2" fill="#1a1500" />
-      <rect x="7.5" y="19.8" width="12.5" height="2.2" rx="1.1" fill="#1a1500" opacity=".35" />
+    <svg width={30} height={30} viewBox="0 0 360 360" aria-hidden="true" className="shrink-0">
+      <rect width="360" height="360" rx="96" fill="#0b1b3f" />
+      <rect x="16" y="16" width="328" height="328" rx="80" fill="none" stroke="#24376a" strokeWidth="11" />
+      <path d="M78 120 L121 250 L180 155 L229 243 L284 110" fill="none" stroke="#c6f432" strokeWidth="27" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M228 96 H293 V145" fill="none" stroke="#c6f432" strokeWidth="27" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

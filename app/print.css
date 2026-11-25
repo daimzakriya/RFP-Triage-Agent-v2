@@ -3,12 +3,12 @@
 @page {
   size: A4;
   margin: 16mm 14mm 18mm;
-  @bottom-left { content: "idiaz.io  |  Bid / no-bid assessment"; font: 8pt "Instrument Sans", Arial, sans-serif; color: #8a90a2; }
+  @bottom-left { content: "WynBid  |  Bid / no-bid assessment"; font: 8pt "Instrument Sans", Arial, sans-serif; color: #8a90a2; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8pt "Instrument Sans", Arial, sans-serif; color: #8a90a2; }
 }
 @media print {
 /* =====================================================================
-   idiaz.io RFP Triage Agent
+   WynBid RFP Triage Agent
    Concept: "the highlighter desk". An RFP is read the way a bids lead
    reads one: with highlighters. The highlighter inks are the brand:
    they colour the ambient aura behind frosted-glass panels, the section

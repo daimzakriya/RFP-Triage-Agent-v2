@@ -51,20 +51,14 @@ export function Icon({ name, size = 16, className, label }: { name: keyof typeof
   );
 }
 
-/** idiaz mark: a stylised "i" in a rounded square with a scan line. */
+/** WynBid mark: a rising "W" on a navy tile. */
 export function Mark({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true" className="mark">
-      <defs>
-        <linearGradient id="mk" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#ff6a3d" />
-          <stop offset="1" stopColor="#8b5cf6" />
-        </linearGradient>
-      </defs>
-      <rect x="1" y="1" width="30" height="30" rx="9" fill="url(#mk)" />
-      <circle cx="16" cy="9.5" r="2.4" fill="#fff" />
-      <rect x="13.6" y="13.5" width="4.8" height="11" rx="2.4" fill="#fff" />
-      <rect x="5" y="18" width="22" height="1.6" rx=".8" fill="#fff" opacity=".45" />
+    <svg width={size} height={size} viewBox="0 0 360 360" aria-hidden="true" className="mark">
+      <rect width="360" height="360" rx="96" fill="#0b1b3f" />
+      <rect x="16" y="16" width="328" height="328" rx="80" fill="none" stroke="#24376a" strokeWidth="11" />
+      <path d="M78 120 L121 250 L180 155 L229 243 L284 110" fill="none" stroke="#c6f432" strokeWidth="27" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M228 96 H293 V145" fill="none" stroke="#c6f432" strokeWidth="27" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

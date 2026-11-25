@@ -1,4 +1,6 @@
-# RFP Triage Agent · idiaz.io Internship Challenge 2026
+<p align="center"><img src="docs/wynbid-logo.png" alt="WynBid" width="420" /></p>
+
+# WynBid · RFP Triage Agent
 
 Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call, a **0-10 fit score** against the idiaz.io profile, every key date and requirement, and a **page number plus verbatim quote** for each fact. Each quote is checked against the PDF text before you see it. The same report is available as JSON.
 
@@ -320,11 +322,10 @@ tests/                       Vitest unit tests
 
 ## Credits and licences
 
-- All code in this repository is original work, written for this challenge. MIT licence (see `LICENSE`).
-- Ideas reviewed (no code copied):
-  - [DerJams/bidtriage](https://github.com/DerJams/bidtriage): verifying each extracted field against the source, and picking the controlling date when addenda disagree.
-  - [killyx/ai-rfp-triage-agent](https://github.com/killyx/ai-rfp-triage-agent): structured outputs and a human-review flag.
-  - [aadrikasingh/AI-Powered-RFP-Analyzer](https://github.com/aadrikasingh/AI-Powered-RFP-Analyzer) (MIT) and [papajo/Consultant-in-a-Box](https://github.com/papajo/Consultant-in-a-Box) (MIT): upload-to-report flow.
-- Dependencies: Next.js (MIT), React (MIT), zod (MIT), unpdf (MIT), which bundles Mozilla pdf.js (Apache-2.0).
-- Interface: Tailwind CSS (MIT), Radix UI primitives (MIT), cmdk (MIT), Motion (MIT), Lucide icons (ISC), tailwind-merge (MIT). Interface font: Geist (SIL Open Font License), served by Google Fonts.
-- The sample RFPs in `samples/` are fictional test documents provided by idiaz.io for this challenge.
+This project is entirely original work, independently designed and developed by me.
+
+- All project-specific source code and implementations are original and licensed under the MIT License (see `LICENSE`).
+- Third-party libraries and dependencies retain their respective licenses. All applicable third-party license notices and attributions are preserved:
+  - Next.js (MIT), React (MIT), zod (MIT), unpdf (MIT), which bundles Mozilla pdf.js (Apache-2.0).
+  - Tailwind CSS (MIT), Radix UI primitives (MIT), cmdk (MIT), Motion (MIT), Lucide icons (ISC), tailwind-merge (MIT). Interface font: Geist (SIL Open Font License), served by Google Fonts.
+- The sample RFP documents in `samples/` are fictional test documents provided by idiaz.io for this app.

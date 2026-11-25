@@ -132,8 +132,8 @@ export function Report({
       <header className="print-only print-cover" aria-hidden="true">
         <div className="pc-top">
           <div className="pc-brand">
-            <svg width="22" height="22" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="#24305e" /><circle cx="16" cy="9.5" r="2.4" fill="#fff" /><rect x="13.6" y="13.5" width="4.8" height="11" rx="2.4" fill="#fff" /></svg>
-            <span>idiaz.io</span>
+            <svg width="22" height="22" viewBox="0 0 360 360" aria-hidden="true"><rect width="360" height="360" rx="96" fill="#0b1b3f" /><path d="M78 120 L121 250 L180 155 L229 243 L284 110" fill="none" stroke="#c6f432" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" /><path d="M228 96 H293 V145" fill="none" stroke="#c6f432" strokeWidth="30" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <span>Wyn<span style={{ color: "#5d8a00" }}>Bid</span></span>
           </div>
           <div className="pc-doc">Bid / no-bid assessment</div>
         </div>

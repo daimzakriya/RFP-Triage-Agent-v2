@@ -3,7 +3,7 @@ import "./globals.css";
 import "./print.css";
 
 export const metadata: Metadata = {
-  title: "RFP Triage Agent · idiaz.io",
+  title: "WynBid · RFP Triage Agent",
   description: "Drop in a government RFP and get an evidence-backed bid/no-bid report in about a minute.",
 };
 

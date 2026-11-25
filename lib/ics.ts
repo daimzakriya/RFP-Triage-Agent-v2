@@ -29,7 +29,7 @@ function nextDay(iso: string) {
 
 export function reportsToIcs(reports: TriageReport[], now = new Date()): string {
   const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//idiaz.io//RFP Triage Agent//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//WynBid//RFP Triage Agent//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH"];
 
   for (const r of reports) {
     for (const d of r.deadlines) {
@@ -42,7 +42,7 @@ export function reportsToIcs(reports: TriageReport[], now = new Date()): string 
         d.note ?? "",
         ...d.evidence.map((e) => `Source p.${e.page}: "${e.quote}"`),
       ].filter(Boolean).join("\n");
-      const uid = `${(r.solicitation_number || r.title).replace(/[^A-Za-z0-9]+/g, "-")}-${d.kind}-${d.date}@rfp-triage.idiaz`;
+      const uid = `${(r.solicitation_number || r.title).replace(/[^A-Za-z0-9]+/g, "-")}-${d.kind}-${d.date}@wynbid`;
       lines.push(
         "BEGIN:VEVENT",
         `UID:${uid}`,
