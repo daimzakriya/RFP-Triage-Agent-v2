@@ -58,7 +58,7 @@ export default function Report({ r, tab, ctx }) {
                     <MenuItem onSelect={() => ctx.actions.json(r.id)}><Download size={15} />Download JSON</MenuItem>
                     {ctx.actions.canRetry(r.id) && <MenuItem disabled={ctx.busy} onSelect={() => ctx.actions.retry(r.id)}><RefreshCw size={15} />Run the analysis again</MenuItem>}
                     <MenuSep />
-                    <MenuItem onSelect={() => { ctx.actions.remove(r.id); ctx.go("#desk"); }} className="text-nobid data-[highlighted]:text-nobid"><Trash2 size={15} />Remove from desk</MenuItem>
+                    <MenuItem onSelect={() => ctx.actions.remove(r.id)} className="text-nobid data-[highlighted]:text-nobid"><Trash2 size={15} />Remove from desk</MenuItem>
                   </MenuContent>
                 </Menu>
               </div>

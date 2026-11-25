@@ -35,7 +35,10 @@ export default function Desk({ ctx }) {
             <h1 className="text-[22px] font-semibold tracking-[-0.02em]">Bid Desk</h1>
             <p className="text-ink-2 mt-1">{rows.length ? `${bids.length} of ${rows.length} RFP${rows.length > 1 ? "s are" : " is"} worth bidding.` : "Your triaged RFPs, ranked."} {!rows.length ? "" : mand14.length ? `${mand14.length} mandatory event${mand14.length > 1 ? "s" : ""} in the next two weeks.` : ""}</p>
           </div>
-          {rows.length > 0 && <Button onClick={ctx.actions.icsAll}><CalendarPlus size={15} />Export bid deadlines</Button>}
+          {rows.length > 0 && <div className="flex flex-wrap gap-2">
+            <Button variant="ghost" className="text-ink-3 hover:text-nobid hover:bg-nobid-soft" onClick={ctx.actions.clearAll}><Trash2 size={15} />Clear all</Button>
+            <Button onClick={ctx.actions.icsAll}><CalendarPlus size={15} />Export bid deadlines</Button>
+          </div>}
         </div>
 
         {!rows.length ? (
@@ -69,19 +72,20 @@ export default function Desk({ ctx }) {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[13.5px] border-collapse">
-              <thead className="bg-subtle/60 border-b border-line"><tr><Th k="rank" className="w-10">#</Th><Th k="title">RFP</Th><Th>Call</Th><Th k="fit">Fit</Th><Th className="hidden md:table-cell">Value</Th><Th k="due">Proposal due</Th><Th className="hidden xl:table-cell">Next mandatory event</Th><Th className="hidden md:table-cell">Next action</Th><Th className="w-10"><span className="sr-only">Actions</span></Th></tr></thead>
+              <thead className="bg-subtle border-b border-line"><tr><Th k="rank" className="w-10">#</Th><Th k="title">RFP</Th><Th>Call</Th><Th k="fit">Fit</Th><Th className="hidden md:table-cell">Value</Th><Th k="due">Proposal due</Th><Th className="hidden 2xl:table-cell">Next mandatory event</Th><Th className="hidden md:table-cell">Next action</Th><Th className="w-20 sticky right-0 bg-subtle"><span className="sr-only">Actions</span></Th></tr></thead>
               <tbody>
                 {shown.map(({ r, d }, i) => (
-                  <tr key={r.id} onClick={() => ctx.go(`#report-${r.id}`)} className="border-b border-line last:border-0 hover:bg-subtle/60 cursor-pointer align-top">
+                  <tr key={r.id} onClick={() => ctx.go(`#report-${r.id}`)} className="group border-b border-line last:border-0 hover:bg-subtle/60 cursor-pointer align-top">
                     <td className="px-4 py-3.5 tnum font-semibold text-ink-3">{i + 1}</td>
                     <td className="px-4 py-3.5 min-w-[260px]"><div className="font-semibold text-ink leading-snug">{r.title}</div>{r.agency && <div className="text-[12.5px] text-ink-3 mt-0.5">{r.agency}</div>}<div className="text-[12px] text-ink-3 tnum">{shortId(r)}</div></td>
                     <td className="px-4 py-3.5"><Decision r={r} /></td>
                     <td className="px-4 py-3.5">{r.degraded ? <span className="text-ink-3">Pending</span> : <div className="flex items-center gap-2.5"><span className="tnum font-semibold w-7 text-right">{r.fit}</span><Meter value={r.fit} tone={r.decision === "BID" ? "bid" : "nobid"} className="w-16" /></div>}</td>
                     <td className="px-4 py-3.5 hidden md:table-cell tnum">{d.value || <span className="text-ink-3">Not stated</span>}</td>
                     <td className="px-4 py-3.5 whitespace-nowrap"><div className="tnum">{fmtDate(d.due?.date)}</div><Rel iso={d.due?.date} /></td>
-                    <td className="px-4 py-3.5 hidden xl:table-cell">{d.nextMandatory ? <><div>{d.nextMandatory.label}</div><div className="flex items-center gap-2 mt-0.5"><span className="text-[11.5px] font-semibold text-nobid">Mandatory</span><Rel iso={d.nextMandatory.date} /></div></> : <span className="text-ink-3">None</span>}</td>
+                    <td className="px-4 py-3.5 hidden 2xl:table-cell">{d.nextMandatory ? <><div>{d.nextMandatory.label}</div><div className="flex items-center gap-2 mt-0.5"><span className="text-[11.5px] font-semibold text-nobid">Mandatory</span><Rel iso={d.nextMandatory.date} /></div></> : <span className="text-ink-3">None</span>}</td>
                     <td className="px-4 py-3.5 hidden md:table-cell min-w-[190px]"><div>{d.nextAction.title}</div><div className="text-[12.5px] text-ink-3">{r.degraded ? "Retry the full analysis" : r.decision === "BID" ? `${d.verify} requirement${d.verify === 1 ? "" : "s"} to verify` : `${d.blocking} blocking deal-breaker${d.blocking === 1 ? "" : "s"}`}</div></td>
-                    <td className="px-2 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-2 py-2.5 whitespace-nowrap sticky right-0 bg-surface group-hover:bg-subtle" onClick={(e) => e.stopPropagation()}>
+                      <Tip content="Remove from desk"><Button variant="ghost" size="icon" className="text-ink-3 hover:text-nobid hover:bg-nobid-soft" onClick={() => ctx.actions.remove(r.id)} aria-label={`Remove ${r.title} from the desk`}><Trash2 size={15} /></Button></Tip>
                       <Menu>
                         <MenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Actions for ${r.title}`}><MoreHorizontal size={16} /></Button></MenuTrigger>
                         <MenuContent>

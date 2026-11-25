@@ -1,10 +1,10 @@
-import { FileUp, LayoutList, Sun, Moon, PanelLeftClose, PanelLeftOpen, Clock, X } from "lucide-react";
+import { FileUp, LayoutList, Trash2, Sun, Moon, PanelLeftClose, PanelLeftOpen, Clock, X } from "lucide-react";
 import { cn, derive, relText, urgency, shortId } from "./lib";
 import { Tip } from "./ui";
 
 /* The sidebar is a bid pipeline, not a link list: each RFP shows its call, fit and countdown,
    and the next deadlines across every RFP sit underneath. Ink in both themes. */
-export default function Sidebar({ reports, route, go, job, queued, dark, setDark, collapsed, setCollapsed, mobile, onClose }) {
+export default function Sidebar({ reports, route, go, onRemove, job, queued, dark, setDark, collapsed, setCollapsed, mobile, onClose }) {
   const items = reports.map((r) => ({ r, d: derive(r) }));
   const groups = [
     ["Bidding", items.filter((x) => x.r.decision === "BID")],
@@ -49,8 +49,9 @@ export default function Sidebar({ reports, route, go, job, queued, dark, setDark
                   </Tip>
                 );
                 return (
-                  <button key={r.id} onClick={() => go(`#report-${r.id}`)} aria-current={active ? "page" : undefined}
-                    className={cn("group relative w-full text-left rounded-xl pl-3.5 pr-2.5 py-2.5 cursor-pointer transition-colors", active ? "bg-side-3" : "hover:bg-side-2")}>
+                  <div key={r.id} className="group/item relative">
+                  <button onClick={() => go(`#report-${r.id}`)} aria-current={active ? "page" : undefined}
+                    className={cn("group relative w-full text-left rounded-xl pl-3.5 pr-8 py-2.5 cursor-pointer transition-colors", active ? "bg-side-3" : "hover:bg-side-2")}>
                     <span className="absolute left-1.5 top-3 bottom-3 w-[3px] rounded-full" style={{ background: tone }} />
                     <span className="block text-[13px] font-medium leading-snug line-clamp-2 text-side-ink">{r.title}</span>
                     <span className="mt-1.5 flex items-center gap-2 text-[11.5px]">
@@ -58,8 +59,10 @@ export default function Sidebar({ reports, route, go, job, queued, dark, setDark
                       <span className="tnum text-side-ink-3 truncate">{shortId(r)}</span>
                       {due && <span className={cn("ml-auto inline-flex items-center gap-1 tnum shrink-0", urgency(due) === "urgent" ? "text-[var(--nobid)]" : urgency(due) === "soon" ? "text-hilite" : "text-side-ink-3")}><Clock size={11} />{relText(due).replace("in ", "")}</span>}
                     </span>
-                    
                   </button>
+                  <button onClick={() => onRemove(r.id)} aria-label={`Remove ${r.title} from the desk`} title="Remove from desk"
+                    className="absolute right-1.5 top-2 p-1 rounded-md text-side-ink-3 hover:text-[var(--nobid)] hover:bg-side-2 cursor-pointer opacity-0 group-hover/item:opacity-100 focus-visible:opacity-100 max-lg:opacity-100 transition-opacity"><Trash2 size={13} /></button>
+                  </div>
                 );
               })}
             </div>

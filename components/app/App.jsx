@@ -168,16 +168,36 @@ export default function App() {
   useEffect(() => { if (view !== "report" || (evidence && evidence.id !== route.id)) setEvidence(null); }, [view, route.id]); // eslint-disable-line
 
   const go = useCallback((hash) => { setNav(false); if (location.hash === hash) setRoute(parseHash()); else location.hash = hash; }, []);
-  const notify = useCallback((msg) => setToast({ msg, k: Date.now() }), []);
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3400); return () => clearTimeout(t); }, [toast]);
+  const notify = useCallback((msg, action) => setToast({ msg, action, k: Date.now() }), []);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), toast.action ? 7000 : 3400); return () => clearTimeout(t); }, [toast]);
+
+  /* Removal is undoable: stored PDFs are deleted only once the Undo window has passed. */
+  const [confirmClear, setConfirmClear] = useState(false);
+  const pending = useRef(new Map()); // docId -> timer
+  const dropLater = (gone, keep) => {
+    for (const x of gone) {
+      if (!x.docId || keep.some((k) => k.docId === x.docId)) continue;
+      clearTimeout(pending.current.get(x.docId));
+      pending.current.set(x.docId, setTimeout(() => { pending.current.delete(x.docId); void deletePdf(x.docId); }, 8000));
+    }
+  };
+  const restore = (items) => {
+    for (const x of items) if (x.docId) { clearTimeout(pending.current.get(x.docId)); pending.current.delete(x.docId); }
+    setDesk((d) => [...items.filter((x) => !d.some((k) => k.id === x.id)), ...d]);
+    setToast(null);
+  };
 
   const actions = {
     remove: (id) => {
       const gone = desk.find((x) => x.id === id);
-      if (gone?.docId && !desk.some((x) => x.id !== id && x.docId === gone.docId)) void deletePdf(gone.docId);
-      setDesk((d) => d.filter((x) => x.id !== id));
-      notify("Removed from the Bid Desk.");
+      if (!gone) return;
+      const keep = desk.filter((x) => x.id !== id);
+      dropLater([gone], keep);
+      setDesk(keep);
+      if (route.view === "report" && route.id === id) go("#desk");
+      notify(`Removed “${gone.report.title || gone.report.document.fileName}”.`, { label: "Undo", run: () => restore([gone]) });
     },
+    clearAll: () => setConfirmClear(true),
     icsFor: (id) => { const it = byId[id]; if (it) download(`${slug(it.report)}-deadlines.ics`, reportsToIcs([it.report]), "text/calendar"); },
     icsAll: () => {
       const bidReports = desk.filter((d) => d.report.decision === "BID").map((d) => d.report);
@@ -200,7 +220,7 @@ export default function App() {
       <div className="app-screen h-full">
         <div className={cn("h-full grid transition-[grid-template-columns] duration-200", collapsed ? "lg:grid-cols-[68px_minmax(0,1fr)]" : "lg:grid-cols-[264px_minmax(0,1fr)]")}>
           <aside className={cn("fixed inset-y-0 left-0 z-40 w-[280px] lg:static lg:w-auto transition-transform lg:translate-x-0", nav ? "translate-x-0 shadow-pop" : "-translate-x-full")}>
-            <Sidebar reports={reports} route={shown} go={go} job={job} queued={queue.length} dark={dark} setDark={setDark} collapsed={collapsed} setCollapsed={setCollapsed} mobile={nav} onClose={() => setNav(false)} />
+            <Sidebar reports={reports} route={shown} go={go} onRemove={(id) => actions.remove(id)} job={job} queued={queue.length} dark={dark} setDark={setDark} collapsed={collapsed} setCollapsed={setCollapsed} mobile={nav} onClose={() => setNav(false)} />
           </aside>
           {nav && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setNav(false)} />}
 
@@ -228,13 +248,34 @@ export default function App() {
           </div>
         </div>
 
+        <DialogP.Root open={confirmClear} onOpenChange={setConfirmClear}>
+          <DialogP.Portal>
+            <DialogP.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-[2px]" />
+            <DialogP.Content className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[min(440px,92vw)] rounded-2xl border border-line bg-surface p-6 shadow-pop">
+              <DialogP.Title className="text-[17px] font-semibold tracking-[-0.01em]">Clear the Bid Desk?</DialogP.Title>
+              <DialogP.Description className="mt-2 text-[13.5px] text-ink-2 leading-relaxed">This removes all {desk.length} report{desk.length === 1 ? "" : "s"} and their stored PDFs from this browser. You can undo it for a few seconds afterwards.</DialogP.Description>
+              <div className="mt-6 flex justify-end gap-2">
+                <DialogP.Close asChild><Button>Cancel</Button></DialogP.Close>
+                <Button className="bg-nobid text-white border-transparent hover:bg-nobid hover:brightness-110" onClick={() => {
+                  const all = desk;
+                  setConfirmClear(false);
+                  dropLater(all, []);
+                  setDesk([]);
+                  notify(`Cleared ${all.length} report${all.length === 1 ? "" : "s"}.`, { label: "Undo", run: () => restore(all) });
+                }}>Clear all</Button>
+              </div>
+            </DialogP.Content>
+          </DialogP.Portal>
+        </DialogP.Root>
+
         <CommandPalette reports={reports} open={cmd} setOpen={setCmd} go={go} openEvidence={(id, i) => { go(`#report-${id}`); setTimeout(() => setEvidence({ id, i }), 30); }} dark={dark} setDark={setDark} />
 
         <AnimatePresence>
           {toast && (
             <motion.div key={toast.k} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} role="status"
-              className="fixed z-[60] bottom-5 left-1/2 -translate-x-1/2 rounded-xl bg-ink text-bg px-3.5 py-2.5 text-[13px] shadow-pop max-w-[92vw]">
-              {toast.msg}
+              className="fixed z-[60] bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-xl bg-ink text-bg pl-3.5 pr-2 py-2 text-[13px] shadow-pop max-w-[92vw]">
+              <span className="truncate">{toast.msg}</span>
+              {toast.action && <button onClick={toast.action.run} className="shrink-0 h-7 px-2.5 rounded-md bg-hilite text-on-hilite font-semibold cursor-pointer hover:brightness-105">{toast.action.label}</button>}
             </motion.div>
           )}
         </AnimatePresence>

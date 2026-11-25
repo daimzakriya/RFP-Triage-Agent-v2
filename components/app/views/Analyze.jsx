@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 import { motion } from "motion/react";
-import { UploadCloud, FileText, Check, Layers, HardDrive, Clock, ScanText, ArrowRight, AlertTriangle, RefreshCw } from "lucide-react";
+import { UploadCloud, FileText, Check, Layers, HardDrive, Clock, ScanText, ArrowRight, AlertTriangle, RefreshCw, Trash2 } from "lucide-react";
 import { LIMITS } from "@/lib/limits";
 import { cn, fmtDate, shortId, STAGES } from "../lib";
-import { Button, Card, CardHead } from "../ui";
+import { Button, Card, CardHead, Tip } from "../ui";
 import { Decision } from "../parts";
 
 export default function Analyze({ ctx, job, queue, errors, elapsed, addFiles }) {
@@ -93,6 +93,7 @@ export default function Analyze({ ctx, job, queue, errors, elapsed, addFiles }) 
                     <Decision r={r} />
                     {r.degraded && ctx.actions.canRetry(r.id) ? <Button size="sm" disabled={ctx.busy} onClick={() => ctx.actions.retry(r.id)}><RefreshCw size={13} />Retry</Button>
                       : <Button size="sm" onClick={() => ctx.go(`#report-${r.id}`)}>Open<ArrowRight size={13} /></Button>}
+                    <Tip content="Remove from desk"><Button variant="ghost" size="iconSm" className="text-ink-3 hover:text-nobid hover:bg-nobid-soft" onClick={() => ctx.actions.remove(r.id)} aria-label={`Remove ${r.title}`}><Trash2 size={14} /></Button></Tip>
                   </li>
                 ))}</ul>
               </Card>
