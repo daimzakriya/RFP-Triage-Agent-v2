@@ -212,9 +212,9 @@ export default function Home() {
           <div className="side-status">
             <div className="pulse-row">
               <span className={`pulse ${job ? "busy" : ""}`} aria-hidden="true" />
-              {job ? "Analysing…" : "Ready"}
+              {job ? "Reading your RFP…" : "Ready"}
             </div>
-            <div className="small muted">Reads with Gemini, with Mistral and Nemotron as backups. Every quote is checked against the PDF.</div>
+            <div className="small muted">{job ? "This usually takes about a minute." : "Drop in an RFP to get a bid call."}</div>
           </div>
         </aside>
 
@@ -312,7 +312,7 @@ export default function Home() {
                       {elapsed > 45 && (
                         <p className="small muted" style={{ marginBottom: 0 }}>
                           {elapsed > 90
-                            ? "The free AI model is busy, so the agent is retrying or switching to a backup model. This can take up to a few minutes."
+                            ? "This one is taking longer than usual. Still working, and it can take a couple of minutes."
                             : "Long documents take a little longer. Still working…"}
                         </p>
                       )}

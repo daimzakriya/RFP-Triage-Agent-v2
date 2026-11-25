@@ -143,7 +143,7 @@ export function Report({
             {r.degraded && (
               <>
                 <p className="small" style={{ margin: "0 0 10px" }}>
-                  The free AI models were busy, so this is a text-search report without a fit score.
+                  The full analysis couldn't finish just now, so this is a quick text-search report without a fit score.
                 </p>
                 {onRetry && (
                   <button className="btn btn-primary btn-sm no-print" onClick={onRetry} disabled={retrying}>
@@ -403,7 +403,7 @@ export function Report({
               </div>
             ))}
             <p className="small muted" style={{ marginBottom: 0 }}>
-              BID needs at least 6/10, no blocking deal-breaker, and agreement from the model's judgement.
+              We recommend bidding at 6/10 or above, when nothing blocks eligibility and the overall review agrees.
             </p>
           </section>
           )}
@@ -506,14 +506,8 @@ export function Report({
       </div>
 
       <p className="small muted" style={{ marginTop: 14 }}>
-        {r.document.fileName} · {r.document.pageCount} pages · analysed by {r.model.provider} ({r.model.name})
-        {r.model.latencyMs ? ` in ${(r.model.latencyMs / 1000).toFixed(1)}s` : ""} · {new Date(r.generatedAt).toLocaleString()}
-        {r.usage && r.usage.input > 0 && (
-          <>
-            {" "}· {r.pipeline === "v2" ? "evidence-first pipeline" : "single-call pipeline"}, {r.usage.calls} model call{r.usage.calls > 1 ? "s" : ""}, {r.usage.input.toLocaleString()} input tokens
-            {r.usage.cached ? ` (${r.usage.cached.toLocaleString()} cached)` : ""}, {r.usage.output.toLocaleString()} output, {r.usage.thinking.toLocaleString()} thinking
-          </>
-        )}
+        {r.document.fileName}, {r.document.pageCount} pages. Analysed{" "}
+        {new Date(r.generatedAt).toLocaleString(undefined, { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" })}.
       </p>
     </div>
     </CategoryContext.Provider>
