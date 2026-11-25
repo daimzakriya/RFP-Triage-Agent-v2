@@ -25,8 +25,8 @@ export function BidDesk({
     <section className="card desk-card" aria-labelledby="desk-h">
       <div className="card-head">
         <div>
-          <div className="label"><Icon name="desk" size={13} /> Bonus feature · Bid Desk</div>
-          <h2 id="desk-h">What to work on first</h2>
+          <h2 id="desk-h">Bid Desk</h2>
+          <p className="desk-sub">What to work on first, ranked by our call, fit and how soon the proposal is due.</p>
         </div>
         {items.length > 0 && (
           <button className="btn btn-sm" onClick={onExportAll} title="Calendar file with every dated deadline for the RFPs marked BID">
@@ -37,13 +37,12 @@ export function BidDesk({
 
       {items.length === 0 ? (
         <div className="empty">
-          Triaged RFPs collect here, ranked by decision, fit and how soon they're due.
-          <br />Drop in several PDFs at once to compare them.
+          Nothing here yet. Each RFP you drop in lands on this desk, so you can compare them and see what's due next.
         </div>
       ) : (
         <>
           <p className="small muted" style={{ marginTop: -4 }}>
-            {items.length} RFP{items.length > 1 ? "s" : ""} triaged · {bids} worth bidding · saved in this browser only
+            {items.length} RFP{items.length > 1 ? "s" : ""} triaged, {bids} worth bidding. Saved in this browser only.
           </p>
           <div className="table-wrap">
             <table className="desk">

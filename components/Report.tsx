@@ -120,12 +120,19 @@ export function Report({
 
   return (
     <CategoryContext.Provider value={categories}>
-    <div>
+    <div
+      className="report"
+      onClick={(e) => {
+        const t = e.target as HTMLElement;
+        if (t.closest("button, a, summary, input, textarea, select") || window.getSelection()?.toString()) return;
+        t.closest(".ev-row")?.querySelector<HTMLButtonElement>(".src-btn")?.click();
+      }}
+    >
       {/* ---------- decision ---------- */}
       <section className="card hero-card" id="sec-verdict" aria-labelledby="decision-h">
         <div className="hero">
           <div className={`verdict ${r.degraded ? "pending" : bid ? "bid" : "nobid"}`}>
-            <div className="label" style={{ color: "inherit" }}>Recommendation</div>
+            <div className="verdict-label">Our call</div>
             <div className="verdict-ring">
               <Ring value={r.degraded ? 0 : r.fit_score} tone={r.degraded ? "pending" : bid ? "bid" : "nobid"} />
               <div className="verdict-center">
@@ -243,7 +250,7 @@ export function Report({
         )}
         <div className="hl-hint no-print">
           <p className="small" style={{ margin: "0 0 6px" }}>
-            <b>See it in the PDF:</b> click any <span className="ev-btn verified" aria-hidden="true">p.5 ✓</span> badge to open the original page with the passage highlighted. Colours:
+            <b>See it in the PDF.</b> Click any finding, or its <span className="src-btn" aria-hidden="true"><span className="src-ink" style={{ ["--cat" as string]: "#ffe45c" } as React.CSSProperties} />p.5</span> source, to open the original page with the passage highlighted. Hover a source to read the quote. Highlight colours:
           </p>
           <Legend compact />
         </div>
@@ -265,7 +272,7 @@ export function Report({
         <div>
           {/* ---------- summary & facts ---------- */}
           <section className="card" id="sec-summary" aria-labelledby="summary-h">
-            <div className="label"><span className="num">01</span><Icon name="summary" size={13} /> Summary</div>
+            <div className="sec-title" data-cat="other"><span>Summary</span></div>
             <h2 id="summary-h" className="sr-only">Summary</h2>
             <p style={{ marginTop: 6 }}>{r.summary}</p>
             <div className="kv" style={{ marginTop: 8 }}>
@@ -274,7 +281,7 @@ export function Report({
                 return (
                   <div key={k} style={{ display: "contents" }}>
                     <div className="k">{FACT_LABELS[k]}</div>
-                    <div className={f.needsReview ? "review" : ""}>
+                    <div className={`ev-row ${f.needsReview ? "review" : ""}`}>
                       {f.status === "not_stated" ? <span className="not-stated">Not stated</span> : f.value}{" "}
                       <StatusChip status={f.status} needsReview={f.needsReview} />
                       <EvidenceList evidence={f.evidence} />
@@ -288,7 +295,7 @@ export function Report({
 
           {/* ---------- requirements ---------- */}
           <section className="card" id="sec-requirements" aria-labelledby="req-h">
-            <div className="label"><span className="num">02</span><Icon name="checks" size={13} /> Requirements</div>
+            <div className="sec-title" data-cat="mandatory"><span>Requirements</span></div>
             <h2 id="req-h" className="sr-only">Requirements</h2>
             {grouped.length === 0 && <p className="not-stated">No requirements stated.</p>}
             {grouped.map((g) => (
@@ -296,7 +303,7 @@ export function Report({
                 <h3 style={{ marginTop: 10 }}>{REQ_LABELS[g.cat]}</h3>
                 <ul className="req-list">
                   {g.items.map((q, i) => (
-                    <li key={i} className={q.needsReview ? "review" : ""}>
+                    <li key={i} className={`ev-row ${q.needsReview ? "review" : ""}`}>
                       {q.id && <span className="req-id">{q.id}</span>}
                       <span className={`chip ${q.mandatory ? "chip-accent" : "chip-neutral"}`} style={{ marginRight: 6 }}>
                         {q.mandatory ? "must" : "scored"}
@@ -324,13 +331,13 @@ export function Report({
           {/* ---------- dates ---------- */}
           <section className="card" id="sec-dates" aria-labelledby="dates-h">
             <div className="card-head">
-              <div className="label"><span className="num">03</span><Icon name="calendar" size={13} /> Key dates</div>
+              <div className="sec-title" data-cat="date"><span>Key dates</span></div>
               <button className="btn btn-sm no-print" onClick={onDownloadIcs}><Icon name="plus" /> Add to calendar</button>
             </div>
             <h2 id="dates-h" className="sr-only">Key dates</h2>
             <ol className="timeline">
               {r.deadlines.map((d, i) => (
-                <li key={i} className={d.needsReview ? "review" : ""}>
+                <li key={i} className={`ev-row ${d.needsReview ? "review" : ""}`}>
                   <div className="date">
                     {d.date ? formatIsoLong(d.date) : <span className="not-stated">Not stated</span>}
                     {d.original_date && d.original_date !== d.date && (
@@ -357,11 +364,11 @@ export function Report({
           {/* ---------- addenda ---------- */}
           {r.addenda && r.addenda.length > 0 && (
             <section className="card" aria-labelledby="add-h">
-              <div className="label"><Icon name="layers" size={13} /> Addenda</div>
+              <div className="sec-title" data-cat="date"><span>Addenda</span></div>
               <h2 id="add-h" className="sr-only">Addenda</h2>
               <ul className="req-list">
                 {r.addenda.map((a, i) => (
-                  <li key={i}>
+                  <li key={i} className="ev-row">
                     <strong>{a.label}</strong>
                     {a.issued_date && <span className="muted"> · issued {a.issued_date}</span>}{" "}
                     <span className={`chip ${a.confirmed ? "chip-bid" : "chip-warn"}`}>{a.confirmed ? "found in text" : "unconfirmed"}</span>
@@ -383,7 +390,7 @@ export function Report({
           {!r.degraded && (
           <section className="card" id="sec-fit" aria-labelledby="fit-h">
             <div className="card-head">
-              <div className="label"><span className="num">04</span><Icon name="gauge" size={13} /> Fit score</div>
+              <div className="sec-title" data-cat="eligibility"><span>Fit score</span></div>
               <span className="score"><b>{r.fit_score}</b> / 10</span>
             </div>
             <h2 id="fit-h" className="sr-only">Fit score breakdown</h2>
@@ -404,7 +411,7 @@ export function Report({
           {/* ---------- evaluation & submission ---------- */}
           {(r.evaluation_criteria || r.submission_items) && (
             <section className="card" id="sec-scoring" aria-labelledby="ev-h">
-              <div className="label"><span className="num">05</span><Icon name="scale" size={13} /> How it's scored & what to submit</div>
+              <div className="sec-title" data-cat="evaluation"><span>How it's scored & what to submit</span></div>
               <h2 id="ev-h" className="sr-only">Evaluation and submission</h2>
               {r.evaluation_criteria && r.evaluation_criteria.length > 0 ? (
                 <table className="desk" style={{ marginTop: 6 }}>
@@ -413,7 +420,7 @@ export function Report({
                   </thead>
                   <tbody>
                     {r.evaluation_criteria.map((c, i) => (
-                      <tr key={i}>
+                      <tr key={i} className="ev-row">
                         <td>
                           {c.name} <EvidenceList evidence={c.evidence} />
                           {c.notes && <div className="note">{c.notes}</div>}
@@ -436,7 +443,7 @@ export function Report({
                   <h3 style={{ marginTop: 12 }}>Submission checklist</h3>
                   <ul className="req-list">
                     {r.submission_items.map((x, i) => (
-                      <li key={i}>
+                      <li key={i} className="ev-row">
                         <span className={`chip ${x.required ? "chip-accent" : "chip-neutral"}`} style={{ marginRight: 6 }}>{x.required ? "required" : "optional"}</span>
                         {x.name}
                         {x.notes && <span className="muted"> · {x.notes}</span>}
@@ -451,7 +458,7 @@ export function Report({
                   <h3 style={{ marginTop: 12 }}>Commercial & contract terms</h3>
                   <ul className="req-list">
                     {r.contract_terms.map((x, i) => (
-                      <li key={i}>
+                      <li key={i} className="ev-row">
                         <strong>{x.topic}:</strong> {x.text}
                         <EvidenceList evidence={x.evidence} />
                       </li>
@@ -464,14 +471,14 @@ export function Report({
 
           {/* ---------- deal-breakers & questions ---------- */}
           <section className="card" id="sec-risks" aria-labelledby="db-h">
-            <div className="label"><span className="num">06</span><Icon name="alert" size={13} /> Deal-breakers</div>
+            <div className="sec-title" data-cat="risk"><span>Deal-breakers</span></div>
             <h2 id="db-h" className="sr-only">Deal-breakers</h2>
             {r.deal_breakers.length === 0 ? (
               <p className="small muted">{r.degraded ? "Needs the AI assessment. Use Retry." : "None found."}</p>
             ) : (
               <ul className="req-list">
                 {r.deal_breakers.map((d, i) => (
-                  <li key={i} className={d.needsReview ? "review" : ""}>
+                  <li key={i} className={`ev-row ${d.needsReview ? "review" : ""}`}>
                     <span className={`chip ${d.severity === "blocking" ? "chip-nobid" : "chip-warn"}`} style={{ marginRight: 6 }}>
                       {d.severity === "blocking" ? "blocking" : "verify"}
                     </span>

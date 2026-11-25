@@ -214,7 +214,7 @@ export default function Home() {
               <span className={`pulse ${job ? "busy" : ""}`} aria-hidden="true" />
               {job ? "Analysing…" : "Ready"}
             </div>
-            <div className="small muted">Gemini 3.x · Mistral & Nemotron backups · every quote checked against the PDF</div>
+            <div className="small muted">Reads with Gemini, with Mistral and Nemotron as backups. Every quote is checked against the PDF.</div>
           </div>
         </aside>
 
@@ -232,24 +232,16 @@ export default function Home() {
             </div>
           </header>
 
-          <section id="sec-upload" className="launch">
-            <div className="launch-copy">
-              <div className="eyebrow"><Icon name="sparkles" size={14} /> AI bid/no-bid triage</div>
-              <h1>
-                Drop an RFP.<br />
-                <span className="grad">Get the bid call.</span>
-              </h1>
-              <p className="lede">
-                A fit score against the idiaz.io profile, every deadline and requirement, deal-breakers and questions for the agency.
-                Every fact links to the sentence in the PDF that proves it.
-              </p>
-              <ul className="feature-pills">
-                <li><Icon name="clock" size={14} /> about a minute</li>
-                <li><Icon name="shield" size={14} /> evidence-checked</li>
-                <li><Icon name="eye" size={14} /> highlights in the PDF</li>
-                <li><Icon name="layers" size={14} /> many RFPs at once</li>
-              </ul>
-            </div>
+          <section id="sec-upload" className={`launch ${desk.length ? "compact" : ""}`}>
+            {!desk.length && (
+              <div className="launch-copy">
+                <h1>Should we bid on this one?</h1>
+                <p className="lede">
+                  Drop in a government RFP. About a minute later you&apos;ll know whether idiaz.io should bid, what winning it would take,
+                  and exactly where the document says so.
+                </p>
+              </div>
+            )}
 
             <div className="launch-drop">
               <div
@@ -266,12 +258,16 @@ export default function Home() {
                 }}
               >
                 <div className="drop-icon" aria-hidden="true">
-                  <Icon name="file" size={30} />
+                  <Icon name="file" size={desk.length ? 20 : 26} />
                 </div>
-                <p className="big">Drag RFP PDFs here</p>
-                <p className="muted small">or</p>
+                <div className="drop-text">
+                  <p className="big">{desk.length ? "Add another RFP" : "Drop RFP PDFs here"}</p>
+                  <p className="limits">
+                    Text-based PDF, up to {LIMITS.maxPages} pages and {LIMITS.maxFileBytes / 1048576} MB. Drop several and they run one after another.
+                  </p>
+                </div>
                 <button className="btn btn-primary btn-lg" onClick={() => inputRef.current?.click()}>
-                  <Icon name="upload" /> Choose PDF files
+                  <Icon name="upload" /> Choose PDFs
                 </button>
                 <input
                   ref={inputRef}
@@ -285,9 +281,6 @@ export default function Home() {
                     e.target.value = "";
                   }}
                 />
-                <div className="limits">
-                  Text-based PDF · up to {LIMITS.maxPages} pages · {LIMITS.maxFileBytes / 1048576} MB · several files run one after another
-                </div>
               </div>
 
               <div aria-live="polite">
@@ -352,7 +345,36 @@ export default function Home() {
                 ))}
               </div>
             </div>
+
+            {!desk.length && (
+              <figure className="specimen" aria-label="Illustration: the agent highlights an RFP page by category">
+                <div className="sheet">
+                  <div className="sheet-head">
+                    <span>Request for Proposals</span>
+                    <span>Page 5</span>
+                  </div>
+                  <div className="sheet-lines">
+                    <p><mark data-c="date">Proposals due January 15, 2027, 3:00 PM Pacific.</mark> Late submissions will not be opened.</p>
+                    <p>The proposer <mark data-c="mandatory">must hold SOC 2 Type II or FedRAMP hosting</mark> and encrypt all data at rest.</p>
+                    <p><mark data-c="evaluation">Technical approach is worth 30 of 100 points</mark>, cost 20 and references 20.</p>
+                    <p>Set aside for <mark data-c="eligibility">small businesses under 100 employees</mark> registered in the state.</p>
+                    <p>Contract value <mark data-c="contract">not to exceed $420,000</mark> over a three-year term.</p>
+                  </div>
+                </div>
+                <figcaption>Every finding links back to the sentence that proves it, highlighted in the original PDF.</figcaption>
+              </figure>
+            )}
           </section>
+
+          {selected && tab === "report" && (
+            <nav className="chips no-print" aria-label="Jump to a report section">
+              {SECTIONS.map((x) => (
+                <button key={x.id} className="chip-link" onClick={() => jump(x.id)}>
+                  {x.label}
+                </button>
+              ))}
+            </nav>
+          )}
 
           <div id="sec-desk">
             <BidDesk
