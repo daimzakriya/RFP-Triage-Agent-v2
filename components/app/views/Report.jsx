@@ -141,7 +141,8 @@ function Overview({ rctx }) {
           </div>
           <div className="min-w-0 @3xl:pt-5">
             <p className="text-[20px] @2xl:text-[23px] leading-[1.3] font-medium tracking-[-0.02em] text-ink max-w-[42ch] text-pretty">{d.headline}</p>
-            <p className="mt-3 text-[13px] text-ink-3 max-w-[60ch]">{r.degraded ? "Every AI provider was busy, so the dates and requirements below come from a text search of the PDF." : bid ? "We recommend bidding at 6/10 or above when nothing blocks eligibility." : r.fastNoBid ? "Stopped early: a blocking requirement rules it out." : "Below 6/10, or blocked by a deal-breaker."}</p>
+            <p className="mt-3 text-[13px] text-ink-3 max-w-[60ch]">{r.degraded ? "The AI models were busy or out of free quota, so the dates and requirements below come from a text search of the PDF. Retrying in a few minutes usually works." : bid ? "We recommend bidding at 6/10 or above when nothing blocks eligibility." : r.fastNoBid ? "Stopped early: a blocking requirement rules it out." : "Below 6/10, or blocked by a deal-breaker."}</p>
+            {r.degraded && r.degradedReason && <details className="mt-2 text-[12.5px] text-ink-3 max-w-[70ch]"><summary className="cursor-pointer">Technical details</summary><div className="mt-1 break-words">{r.degradedReason}</div></details>}
             {r.decisionNote && <div className="mt-4 flex gap-2.5 rounded-lg bg-info-soft px-3 py-2.5 text-[13px] text-ink-2 max-w-[70ch]"><Info size={15} className="shrink-0 mt-0.5 text-info" />{r.decisionNote}</div>}
             <div className="mt-6 inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-surface pl-4 pr-2 py-2 shadow-card">
               <span className="text-[12.5px] text-ink-3">Next step</span>
@@ -159,7 +160,7 @@ function Overview({ rctx }) {
         </div>
       </section>
 
-      <div className="grid @4xl:grid-cols-2 gap-x-12 gap-y-8 py-2">
+      {(r.reasons.length > 0 || r.changeMind.length > 0) && <div className="grid @4xl:grid-cols-2 gap-x-12 gap-y-8 py-2">
         <section>
           <h2 className="text-[15px] font-semibold tracking-[-0.01em]">Why we landed here</h2>
           <ol className="mt-3.5 grid gap-3.5">{r.reasons.map((x, i) => <li key={i} className="flex gap-3 text-[14px] text-ink-2 leading-relaxed"><span className={cn("mt-0.5 w-5 h-5 shrink-0 rounded-full grid place-items-center text-[11px] font-semibold tnum", bid ? "bg-bid-soft text-bid" : "bg-nobid-soft text-nobid")}>{i + 1}</span>{x}</li>)}</ol>
@@ -168,7 +169,7 @@ function Overview({ rctx }) {
           <h2 className="text-[15px] font-semibold tracking-[-0.01em]">What would change the call</h2>
           <ul className="mt-3.5 grid gap-3.5">{r.changeMind.map((x, i) => <li key={i} className="flex gap-3 text-[14px] text-ink-2 leading-relaxed"><AlertTriangle size={15} className="mt-1 shrink-0 text-warn" />{x}</li>)}</ul>
         </section>
-      </div>
+      </div>}
 
       <Card>
         <CardHead title={<span className="inline-flex items-center gap-2"><ShieldCheck size={16} className="text-bid" />Can you trust it?</span>} sub="Every quote is checked against the PDF before you see it" />

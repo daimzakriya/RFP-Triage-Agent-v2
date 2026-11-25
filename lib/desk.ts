@@ -26,7 +26,7 @@ export interface NextAction {
 
 /** The next upcoming dated deadline (today or later). */
 export function nextAction(r: TriageReport, today = new Date()): NextAction | null {
-  const upcoming = r.deadlines
+  const upcoming = (Array.isArray(r.deadlines) ? r.deadlines : [])
     .filter((d) => d.date && daysUntil(d.date, today) >= 0)
     .map((d) => ({ label: d.label, date: d.date!, days: daysUntil(d.date!, today), mandatory: d.mandatory }))
     .sort((a, b) => a.days - b.days);
@@ -34,7 +34,7 @@ export function nextAction(r: TriageReport, today = new Date()): NextAction | nu
 }
 
 export function proposalDue(r: TriageReport, today = new Date()) {
-  const d = r.deadlines.find((x) => x.kind === "proposal_due" && x.date);
+  const d = (Array.isArray(r.deadlines) ? r.deadlines : []).find((x) => x.kind === "proposal_due" && x.date);
   return d?.date ? { date: d.date, days: daysUntil(d.date, today) } : null;
 }
 
@@ -48,7 +48,7 @@ export function rankDesk(items: DeskItem[], today = new Date()): DeskItem[] {
     const expired = due ? due.days < 0 : false;
     return {
       group: expired ? 3 : it.report.decision === "BID" ? 0 : it.report.decision === "UNDETERMINED" ? 1 : 2,
-      fit: -it.report.fit_score,
+      fit: -(it.report.fit_score ?? 0),
       due: due ? due.days : 9999,
     };
   };

@@ -10,11 +10,12 @@ import { locateAll } from "@/lib/evidence-map";
 import { deletePdf, putPdf } from "@/lib/pdf-store";
 import { reportsToIcs } from "@/lib/ics";
 import { extractPdfPages, LIMITS, PdfInputError } from "@/lib/pdf";
-import { viewOf } from "@/lib/view";
+import { viewOf, normalizeReport } from "@/lib/view";
 import { Report as PrintReport } from "@/components/Report";
 import { cn, findings, findingText, CATS, TABS, shortId } from "./lib";
 import { Button, Kbd, TipProvider, Tip } from "./ui";
 import Sidebar from "./Sidebar";
+import ErrorBoundary from "./ErrorBoundary";
 import Desk from "./views/Desk";
 import Analyze from "./views/Analyze";
 import Report from "./views/Report";
@@ -60,8 +61,11 @@ export default function App() {
   useEffect(() => { setDesk(loadDesk()); loaded.current = true; }, []);
   useEffect(() => { if (loaded.current) saveDesk(desk); }, [desk]);
   const ranked = useMemo(() => rankDesk(desk), [desk]);
-  const reports = useMemo(() => ranked.map(viewOf), [ranked]);
-  const byId = useMemo(() => Object.fromEntries(ranked.map((it) => [it.id, it])), [ranked]);
+  // A saved report that can't be read is left out of the list rather than breaking the page.
+  const safeView = (it) => { try { return viewOf(it); } catch (e) { console.error("[rfp-ui] unreadable report", it?.id, e); return null; } };
+  const readable = useMemo(() => ranked.filter((it) => safeView(it)), [ranked]); // eslint-disable-line
+  const reports = useMemo(() => readable.map(viewOf), [readable]);
+  const byId = useMemo(() => Object.fromEntries(readable.map((it) => [it.id, it])), [readable]);
 
   /* ---------- analysis queue: one PDF at a time ---------- */
   const [queue, setQueue] = useState([]);
@@ -241,9 +245,21 @@ export default function App() {
               <Button variant="primary" onClick={() => go("#analyze")}><Plus size={15} strokeWidth={2.4} /><span className="hidden sm:inline">New analysis</span></Button>
             </header>
             <main className="flex-1 min-h-0 relative">
-              {view === "desk" && <Desk ctx={ctx} />}
-              {view === "analyze" && <Analyze ctx={ctx} job={job} queue={queue} errors={errors} elapsed={elapsed} addFiles={addFiles} />}
-              {view === "report" && rep && <Report key={rep.id} r={rep} tab={route.tab} ctx={ctx} />}
+              <ErrorBoundary resetKey={`${view}:${route.id}:${route.tab}`} fallback={view === "report" && rep ? () => (
+                <div className="h-full grid place-items-center p-8 text-center">
+                  <div className="max-w-md">
+                    <h2 className="text-[17px] font-semibold">This report couldn&apos;t be shown</h2>
+                    <p className="mt-2 text-ink-2 text-[13.5px]">Its saved data doesn&apos;t match what this version expects. Your other reports are fine. Remove it and analyse the PDF again.</p>
+                    <div className="mt-5 flex justify-center gap-2">
+                      <Button onClick={() => go("#desk")}>Back to Bid Desk</Button>
+                      <Button variant="primary" onClick={() => actions.remove(rep.id)}>Remove this report</Button>
+                    </div>
+                  </div>
+                </div>) : undefined}>
+                {view === "desk" && <Desk ctx={ctx} />}
+                {view === "analyze" && <Analyze ctx={ctx} job={job} queue={queue} errors={errors} elapsed={elapsed} addFiles={addFiles} />}
+                {view === "report" && rep && <Report key={rep.id} r={rep} tab={route.tab} ctx={ctx} />}
+              </ErrorBoundary>
             </main>
           </div>
         </div>
@@ -282,7 +298,7 @@ export default function App() {
       </div>
 
       {/* The printed report keeps its own document layout. */}
-      {item && <div className="print-root"><PrintReport report={item.report} onDownloadIcs={() => {}} /></div>}
+      {item && <ErrorBoundary resetKey={item.id} fallback={null}><div className="print-root"><PrintReport report={normalizeReport(item.report)} onDownloadIcs={() => {}} /></div></ErrorBoundary>}
     </TipProvider>
   );
 }

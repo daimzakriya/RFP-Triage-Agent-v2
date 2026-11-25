@@ -86,7 +86,9 @@ export function derive(r) {
         ? `Worth bidding. ${verify} requirement${verify === 1 ? "" : "s"} to confirm${dueText}.`
         : `Worth bidding. Nothing left to confirm${dueText}.`
       : `${r.fastNoBid ? "Ruled out early. " : ""}${blocker ? blocker.text : r.reasons[0] || "Not a fit for idiaz.io."}`;
-  const nextAction = r.decision === "BID" || r.degraded
+  const nextAction = r.degraded
+    ? { title: "Retry the full analysis" }
+    : r.decision === "BID"
     ? upcoming[0] ? { title: upcoming[0].label, date: upcoming[0].date } : { title: "Prepare the proposal" }
     : { title: "Archive. No bid." };
   return { due, upcoming, nextMandatory, value, musts, meets: count("meets"), verify, fails: count("fails"), blocking, headline, nextAction };

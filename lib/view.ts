@@ -32,6 +32,7 @@ export interface ReportView {
   agency: string;
   decision: "BID" | "NO_BID" | "UNDETERMINED";
   degraded: boolean;
+  degradedReason: string | null;
   fastNoBid: boolean;
   decisionNote: string | null;
   fit: number;
@@ -103,11 +104,36 @@ export function moneyIn(text: string): string | null {
   return /\$\s?[\d,.]+(?:\s?(?:million|billion|[MK]\b))?/i.exec(text)?.[0] ?? null;
 }
 
+/** An array, or empty when the saved value is missing or malformed. */
+const arr = <T,>(x: T[] | null | undefined): T[] => (Array.isArray(x) ? x : []);
+
+const NOT_STATED = { value: "Not stated", status: "not_stated" as const, note: null, evidence: [], needsReview: false };
+
+/** A saved report with every list and fact present. Reports saved by older versions may lack newer fields. */
+export function normalizeReport(raw: TriageReport): TriageReport {
+  return {
+    ...raw,
+    document: raw.document ?? { fileName: "Untitled.pdf", pageCount: 0, characters: 0, truncated: false },
+    facts: (Object.fromEntries((Object.keys(FACT_LABELS) as (keyof typeof FACT_LABELS)[]).map((k) => [k, (raw.facts && typeof raw.facts === "object" ? raw.facts[k] : null) ?? NOT_STATED])) as TriageReport["facts"]),
+    deadlines: arr(raw.deadlines),
+    requirements: arr(raw.requirements),
+    fit_factors: arr(raw.fit_factors),
+    reasons: arr(raw.reasons),
+    change_mind: arr(raw.change_mind),
+    deal_breakers: arr(raw.deal_breakers),
+    open_questions: arr(raw.open_questions),
+    ambiguities: arr(raw.ambiguities),
+    review_flags: arr(raw.review_flags),
+    evidence_stats: raw.evidence_stats ?? { total: 0, verified: 0, approximate: 0, unverified: 0 },
+  } as TriageReport;
+}
+
 export function toView(item: DeskItem): ReportView {
-  const r = item.report;
-  const cats = new Map(collectFindings(r).map((f) => [f.key, f.category]));
+  const r = normalizeReport(item.report);
+  let cats = new Map<string, HighlightCategory>();
+  try { cats = new Map(collectFindings(r).map((f) => [f.key, f.category])); } catch { /* colours fall back to defaults */ }
   const ev = (list: VerifiedEvidence[] | undefined): ViewEv[] =>
-    (list ?? []).map((e) => {
+    arr(list).filter((e) => e && typeof e.quote === "string" && e.page > 0).map((e) => {
       const loc = item.locations?.[evidenceKey(e)];
       return {
         page: loc?.page ?? e.page,
@@ -126,8 +152,8 @@ export function toView(item: DeskItem): ReportView {
     must: q.mandatory,
     status: reqStatus(q.compliance),
     compliance: q.compliance,
-    text: q.text,
-    values: q.values && !q.text.includes(q.values) ? q.values : null,
+    text: q.text ?? "",
+    values: q.values && !(q.text ?? "").includes(q.values) ? q.values : null,
     reason: q.compliance_reason ?? "",
     ev: ev(q.evidence),
   }));
@@ -138,16 +164,17 @@ export function toView(item: DeskItem): ReportView {
     pages: item.pages,
     fileName: r.document.fileName,
     pageCount: r.document.pageCount,
-    generatedAt: r.generatedAt,
+    generatedAt: r.generatedAt || item.addedAt || new Date().toISOString(),
     title: r.title || r.document.fileName,
-    solicitation: r.solicitation_number || "",
+    solicitation: r.solicitation_number && !/^not stated$/i.test(r.solicitation_number) ? r.solicitation_number : "",
     agency: r.facts.agency.status === "not_stated" ? "" : r.facts.agency.value,
-    decision: r.decision,
-    degraded: !!r.degraded,
-    fastNoBid: r.fastNoBid,
-    decisionNote: r.decisionNote,
-    fit: r.fit_score,
-    summary: r.summary,
+    decision: r.decision ?? "UNDETERMINED",
+    degraded: !!r.degraded || r.decision === "UNDETERMINED" || !r.decision,
+    degradedReason: typeof r.degradedReason === "string" && r.degradedReason ? r.degradedReason : null,
+    fastNoBid: !!r.fastNoBid,
+    decisionNote: r.decisionNote ?? null,
+    fit: typeof r.fit_score === "number" ? r.fit_score : 0,
+    summary: r.summary ?? "",
     facts: (Object.keys(FACT_LABELS) as (keyof typeof FACT_LABELS)[]).map((k) => {
       const f = r.facts[k];
       return {
@@ -182,12 +209,12 @@ export function toView(item: DeskItem): ReportView {
     ambiguities: r.ambiguities.map((a) => ({ text: a.text, ev: ev(a.evidence) })),
     flags: [...r.review_flags].sort((a, b) => (a.level === b.level ? 0 : a.level === "warning" ? -1 : 1)).map((f) => ({ level: f.level, text: f.message })),
     evidenceStats: r.evidence_stats,
-    quality: r.quality ? { status: r.quality.status, checks: r.quality.checks.map((c) => ({ label: c.label, status: c.status, detail: c.detail })) } : null,
-    addenda: (r.addenda ?? []).map((a) => ({ label: a.label, issued: a.issued_date, summary: a.summary, changes: a.changes, ack: a.acknowledgement_required, confirmed: a.confirmed, ev: ev(a.evidence) })),
-    criteria: (r.evaluation_criteria ?? []).map((c) => ({ name: c.name, points: c.points, note: c.notes, ev: ev(c.evidence) })),
+    quality: r.quality ? { status: r.quality.status, checks: arr(r.quality.checks).map((c) => ({ label: c.label, status: c.status, detail: c.detail })) } : null,
+    addenda: arr(r.addenda).map((a) => ({ label: a.label, issued: a.issued_date, summary: a.summary, changes: arr(a.changes), ack: a.acknowledgement_required, confirmed: a.confirmed, ev: ev(a.evidence) })),
+    criteria: arr(r.evaluation_criteria).map((c) => ({ name: c.name, points: c.points, note: c.notes, ev: ev(c.evidence) })),
     award: r.award_basis && r.award_basis.status !== "not_stated" ? { text: r.award_basis.value, ev: ev(r.award_basis.evidence) } : null,
-    submission: (r.submission_items ?? []).map((s) => ({ name: s.name, required: s.required, note: s.notes, limit: pageLimit(`${s.name} ${s.notes ?? ""}`), ev: ev(s.evidence) })),
-    terms: (r.contract_terms ?? []).map((t) => ({ topic: t.topic, text: t.text, ev: ev(t.evidence) })),
+    submission: arr(r.submission_items).map((s) => ({ name: s.name, required: s.required, note: s.notes, limit: pageLimit(`${s.name} ${s.notes ?? ""}`), ev: ev(s.evidence) })),
+    terms: arr(r.contract_terms).map((t) => ({ topic: t.topic, text: t.text, ev: ev(t.evidence) })),
   };
 }
 
