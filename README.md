@@ -2,9 +2,25 @@
 
 Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call, a **0-10 fit score** against the idiaz.io profile, every key date and requirement, and a **page number plus verbatim quote** for each fact. Each quote is checked against the PDF text before you see it. The same report is available as JSON.
 
-![Bid Desk and report](docs/screenshot-report.png)
+![The report: bid call, fit score, key figures and where each finding comes from in the PDF](docs/screenshot-report.png)
 
-**Live link:** `<add your Vercel URL here>` · **Stack:** Next.js 15 (App Router, TypeScript) on Vercel Hobby + Google Gemini 3.8 Flash (free tier). No paid services, database or logins.
+**Live link:** <https://rfp-triage-agent-v2.vercel.app> · **Stack:** Next.js 15 (App Router, TypeScript) and Tailwind CSS on Vercel Hobby, with Google Gemini 3.8 Flash (free tier). No paid services, database or logins.
+
+## Using it
+
+1. **New analysis:** drop one or more RFP PDFs on the upload area. Each one runs in turn, with live progress.
+2. **The report** opens when it's ready. The overview shows the call (Bid / No bid), the fit score against the 6/10 bid line, the next step with its date, and the proposal due date, contract value, must-haves and deal-breakers. Tabs cover requirements, key dates, the fit score, scoring and submission, contract terms and deal-breakers.
+3. **Check any finding in the PDF:** every fact carries a source badge such as `p.5 ✓`. Hover it to read the quote; click it to open the original page with the passage highlighted.
+4. **The Bid Desk** collects every analysed RFP, ranked, with a 60-day deadline timeline and calendar export.
+
+Also in the interface:
+
+- **Search everything** with `Ctrl K`: findings, reports and sections across every RFP. `N` opens a new analysis and `D` the Bid Desk.
+- **Light and dark themes**, remembered per browser. Dark is the default.
+- **The sidebar is the bid pipeline:** RFPs grouped into Bidding, No call yet and Not pursuing, each with its fit score and a countdown to the proposal deadline.
+- **Report actions** (the ⋯ menu): add deadlines to a calendar, print or save as PDF (a clean A4 assessment with a cover header and page numbers), download the JSON, run the analysis again, or remove the report.
+- **Remove with undo:** each RFP has a remove button on the Bid Desk, in the sidebar and in the recent list. Undo is offered for a few seconds, and the stored PDF is deleted only after that. "Clear all" asks first.
+- **Safe with old data:** a saved report that can't be read is skipped or shown with a remove button, so it can never break the page.
 
 ---
 
@@ -19,7 +35,7 @@ Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call,
 | Fit score 0-10 with a one-line reason per factor | `fit_score`, `fit_factors[]` |
 | Bid / no-bid, 3 strongest reasons, what would change its mind | `decision`, `reasons[3]`, `change_mind[]` |
 | Deal-breakers and questions for the agency | `deal_breakers[]` (`blocking` / `verify`), `open_questions[]` (one click copies them as an email) |
-| Flag ambiguity instead of guessing | `ambiguities[]` and `review_flags[]`, shown under "Check before you trust it" |
+| Flag ambiguity instead of guessing | `ambiguities[]` and `review_flags[]`, shown under "Can you trust it?" on the overview and "Unclear in the RFP" on the Deal-breakers tab |
 
 The top-level shape matches the brief's example (`decision`, `fit_score`, `deadlines[{what, date}]`, `requirements`, `reasons`), plus the extra fields above. Every evidence item carries a `check` result: `verified`, `relocated`, `approximate` or `unverified`.
 
@@ -27,18 +43,24 @@ The top-level shape matches the brief's example (`decision`, `fit_score`, `deadl
 
 The brief pictures a bids lead on a Monday with three new RFPs, so the bonus feature is built for that moment.
 
-- **Drop in several PDFs at once.** They are analysed one after another and collect in a ranked table: BIDs first, then by fit score, then by how soon the proposal is due.
-- **Next action column.** Each row shows the nearest upcoming date (for example "Mandatory pre-bid meeting and site walk · in 9d"), so a mandatory site walk can't sneak past. Mandatory dates and anything due within 7 days are highlighted.
+![The Bid Desk: totals, the 60-day timeline and the ranked table](docs/screenshot-desk.png)
+
+- **Drop in several PDFs at once.** They are analysed one after another and collect in a ranked table: BIDs first, then by fit score, then by how soon the proposal is due. Filter by call, search by title or agency, and sort any column.
+- **At a glance:** how many are worth bidding, how many were ruled out early, mandatory events in the next 14 days, and the next proposal due.
+- **Next 60 days.** One timeline shows every dated event across all RFPs, with proposal deadlines flagged and mandatory events marked in red, so a mandatory site walk can't sneak past.
+- **Next action column.** Each row shows the nearest step (for example "Pre-proposal conference" with "10 requirements to verify"). Anything due within 7 days is highlighted.
 - **Calendar export (.ics).** Export one RFP's deadlines, or every deadline for all BIDs, into Outlook, Google Calendar or Apple Calendar. Reminders are set 3 days before proposal deadlines and 1 day before everything else.
 - **Saved in the browser** (localStorage), so the desk survives a reload with no accounts or database.
 
 **Why this one:** the expensive mistake in bid triage is rarely a single wrong field. It's working on the wrong RFP, or missing a mandatory walk-through date and being disqualified. Ranking plus a calendar turns the reports into a work plan.
 
-**How it works:** `lib/desk.ts` (ranking and next action), `lib/ics.ts` (RFC 5545 export with all-day events, so a "3:00 PM Pacific" deadline never lands on the wrong day in another time zone), `components/BidDesk.tsx`.
+**How it works:** `lib/desk.ts` (ranking and next action), `lib/ics.ts` (RFC 5545 export with all-day events, so a "3:00 PM Pacific" deadline never lands on the wrong day in another time zone), `components/app/views/Desk.jsx`.
 
 ### Part two: evidence highlighted in the original PDF
 
-Click any `p.5 ✓` badge and the **original PDF** opens at that page, scrolled to the passage, highlighted in a colour that says what kind of finding it is:
+![A finding opened in the original PDF, with every finding on the page highlighted by category](docs/screenshot-evidence.png)
+
+Click any `p.5 ✓` badge and the **original PDF** opens beside the report at that page, scrolled to the passage, highlighted in a colour that says what kind of finding it is. The strip under each report title is an **evidence map**: one tile per page, coloured by the findings taken from it, so you can see at a glance where the important pages are and open any of them.
 
 | Colour | Findings |
 |---|---|
@@ -50,16 +72,16 @@ Click any `p.5 ✓` badge and the **original PDF** opens at that page, scrolled 
 | Orange | Risks, "verify" deal-breakers and ambiguous facts |
 | Grey | Other key facts and submission items |
 
-Every other finding on the same page is highlighted too, with ▲ ▼ to step between them. Zoom from 50% to 300%; highlights stay in place because they are stored as fractions of the page, not pixels. A legend is shown in the report and in the viewer, and each badge carries its colour dot.
+Every other finding on the same page is highlighted too, and listed under "On this page". The arrows (or the ← → keys) step through all findings in the report, page thumbnails show where each colour sits, and Esc returns to the report at the same finding. Zoom from 60% to 240%; highlights stay in place because they are stored as fractions of the page, not pixels. Each badge carries its colour, and hovering it shows the quote highlighted in that colour.
 
 **Why:** a bid/no-bid call is only as good as the evidence behind it. The reviewer shouldn't have to trust the AI or hunt through 40 pages; one click shows the sentence in the document the agency actually issued.
 
-**How it works** (`lib/evidence-map.ts`, `lib/pdf-store.ts`, `components/PdfEvidenceViewer.tsx`):
+**How it works** (`lib/evidence-map.ts`, `lib/pdf-store.ts`, `components/app/views/Viewer.jsx`, `components/app/pdfPages.js`):
 
 1. **Positions captured once.** When the PDF is read in the browser, pdf.js gives every text run with its transform; these are converted to page-relative boxes in the same pass. Nothing is re-read when a finding is clicked.
 2. **Located once, after analysis.** Each quote is matched against those runs: exact match first, on text normalised for case, whitespace, line breaks, hyphenation, curly quotes, ligatures and accents. Only if that fails, a strict fuzzy fallback looks for a window of page words covering at least 85% of the quote's words. A short quote that occurs more than once on a page is not pinned. When no confident match exists, the viewer opens the page and says that precise highlighting is unavailable, with the reason; it never highlights a lookalike passage.
 3. **Stored with the report.** Each finding keeps its document ID, page, quote, category, boxes and match confidence (`exact` / `fuzzy` / `none` plus a score). The original PDF is kept in the browser's IndexedDB, so the viewer still works after a reload; each Bid Desk entry points to its own PDF, so several uploaded RFPs never get mixed up. Removing an RFP from the desk deletes its PDF.
-4. **Rendering** uses the pdf.js build already in the app (via unpdf), so no extra viewer library was added. Older reports, or a browser that blocks storage, fall back to the page-text viewer.
+4. **Rendering** uses the pdf.js build already in the app (via unpdf), so no extra viewer library was added. Reports saved without positions are located on demand when their page opens. If the PDF isn't stored in this browser, the viewer shows the page text with the quote marked.
 
 On both sample RFPs, all 88 quoted findings are located with an exact match (`tests/evidence-map.test.ts` runs this on the real sample PDF). Scanned PDFs are already rejected at upload with a request to OCR them first, so there is no OCR step in the browser.
 
@@ -116,7 +138,7 @@ Report ◄── TriageReport JSON ────────   mandatory items, d
 - coverage warnings
 - a keyword screen for obviously non-software work
 
-It has no fit score and no recommendation; it never guesses. "Retry full analysis" re-runs the AI pipeline using the already-read PDF text. On both samples this mode still gets every key date right, including the revised proposal date and the mandatory site walk. Set `DISABLE_DEGRADED_MODE=1` to show the raw error instead.
+It has no fit score and no recommendation; it never guesses. The report says in plain words that the AI models were busy or out of free quota, with the exact reason under "Technical details". "Retry full analysis" re-runs the AI pipeline using the already-read PDF text. On both samples this mode still gets every key date right, including the revised proposal date and the mandatory site walk. Set `DISABLE_DEGRADED_MODE=1` to show the raw error instead.
 
 **Retention between stages.** Workers return validated structured data. The reasoning step receives every requirement (ID, category, mandatory flag, exact text and values, pages, whether its quote was verified), every date with original/revised values, the addenda, criteria and terms. Its compliance judgements are mapped back onto the original requirements by ID, so evidence never passes through a model a second time.
 
@@ -217,8 +239,9 @@ Get a key at <https://aistudio.google.com/app/apikey> (free, no card).
 Useful scripts:
 
 ```bash
-npm test                     # 52 unit tests: PDF reading, quote/date checks, addendum scanner, dedupe,
-                             # scoring caps, worker retry, hallucination flagging, clients (mocked)
+npm test                     # 68 unit tests: PDF reading, quote/date checks, addendum scanner, dedupe,
+                             # scoring caps, worker retry, hallucination flagging, clients (mocked),
+                             # evidence positions on the sample PDF, report view helpers
 npm run bench                # live: v1 (baseline) vs v2 on both samples, saves reports + summary.md
 npm run bench -- --samples=1 # Port Alder only (fewer requests)
 npm run eval                 # live: v2 only, non-zero exit if any check fails
@@ -244,9 +267,16 @@ The API route sets `maxDuration = 300` (the Hobby maximum with Fluid compute, wh
 ## Project layout
 
 ```
-app/page.tsx                 UI: upload, progress, Bid Desk, report / JSON tabs
+app/page.tsx                 Entry: loads the workspace in the browser, with a recovery screen
+app/globals.css              Design tokens (light and dark themes) and Tailwind
+app/print.css                Print / Save as PDF layout for the report
 app/api/analyze/route.ts     POST endpoint: validation, rate limit, timeout
-components/                  Report, BidDesk, Evidence badges, SourceViewer
+components/app/App.jsx       Workspace shell: routes, analysis queue, sidebar, search (Ctrl K), undo
+components/app/views/        Analyze (upload + progress), Desk, Report (tabs), Viewer (PDF evidence)
+components/app/Sidebar.jsx   Bid pipeline sidebar and theme switch
+components/app/ui.jsx        Buttons, badges, cards, menus, tooltips (Radix primitives)
+components/Report.tsx        Printed report layout (rendered only when printing)
+lib/view.ts                  Turns a stored report into what the screens show; tolerant of old data
 lib/pdf.ts                   PDF reading and cleaning (browser + Node)
 lib/pipeline/preprocess.ts   Token estimate, page routing, addendum change-statement scanner
 lib/pipeline/workers.ts      Extraction worker prompts + schemas (schedule, requirements, evaluation)
@@ -263,7 +293,6 @@ lib/score.ts                 Rubric, score cap, decision rule
 lib/desk.ts, lib/ics.ts      Bonus feature: ranking and calendar export
 lib/evidence-map.ts          Bonus feature: quote positions, matching, highlight categories
 lib/pdf-store.ts             Original PDFs kept in the browser (IndexedDB)
-components/PdfEvidenceViewer.tsx  PDF viewer with highlights, legend, zoom, navigation
 lib/profile.ts               idiaz.io profile (from the brief) and the list of unknowns
 evals/expected.json          Hand-checked ground truth for the samples (benchmark only)
 scripts/bench.ts             Benchmark / eval runner
@@ -297,4 +326,5 @@ tests/                       Vitest unit tests
   - [killyx/ai-rfp-triage-agent](https://github.com/killyx/ai-rfp-triage-agent): structured outputs and a human-review flag.
   - [aadrikasingh/AI-Powered-RFP-Analyzer](https://github.com/aadrikasingh/AI-Powered-RFP-Analyzer) (MIT) and [papajo/Consultant-in-a-Box](https://github.com/papajo/Consultant-in-a-Box) (MIT): upload-to-report flow.
 - Dependencies: Next.js (MIT), React (MIT), zod (MIT), unpdf (MIT), which bundles Mozilla pdf.js (Apache-2.0).
+- Interface: Tailwind CSS (MIT), Radix UI primitives (MIT), cmdk (MIT), Motion (MIT), Lucide icons (ISC), tailwind-merge (MIT). Interface font: Geist (SIL Open Font License), served by Google Fonts.
 - The sample RFPs in `samples/` are fictional test documents provided by idiaz.io for this challenge.
