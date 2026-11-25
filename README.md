@@ -1,6 +1,6 @@
 # RFP Triage Agent · idiaz.io Internship Challenge 2026
 
-Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call, a **0–10 fit score** against the idiaz.io profile, every key date and requirement, and a **page number plus verbatim quote** for each fact. Each quote is checked against the PDF text before you see it. The same report is available as JSON.
+Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call, a **0-10 fit score** against the idiaz.io profile, every key date and requirement, and a **page number plus verbatim quote** for each fact. Each quote is checked against the PDF text before you see it. The same report is available as JSON.
 
 ![Bid Desk and report](docs/screenshot-report.png)
 
@@ -16,7 +16,7 @@ Drop in a government RFP PDF. In about a minute you get a **BID / NO_BID** call,
 | Agency, scope, contract type & value, location, how to submit | `facts.*`, each with `value`, `status` (`stated` / `not_stated` / `ambiguous`), `note`, `evidence[]` |
 | Key dates (Q&A cut-off, proposal due, site visit, work start) | `deadlines[]`: `what`, `date` (ISO), `time`, `timezone`, `mandatory`, `evidence[]`. Missing ones are always listed as "Not stated". |
 | Skills, certifications, set-asides, clearances, past performance, staffing | `requirements[]`, grouped by `category`, with `mandatory` (must) vs scored |
-| Fit score 0–10 with a one-line reason per factor | `fit_score`, `fit_factors[]` |
+| Fit score 0-10 with a one-line reason per factor | `fit_score`, `fit_factors[]` |
 | Bid / no-bid, 3 strongest reasons, what would change its mind | `decision`, `reasons[3]`, `change_mind[]` |
 | Deal-breakers and questions for the agency | `deal_breakers[]` (`blocking` / `verify`), `open_questions[]` (one click copies them as an email) |
 | Flag ambiguity instead of guessing | `ambiguities[]` and `review_flags[]`, shown under "Check before you trust it" |
@@ -105,7 +105,7 @@ Report ◄── TriageReport JSON ────────   mandatory items, d
 **Why v2 replaced the single call.** Benchmarking v1 on live models surfaced these root causes (details in "Benchmark" below):
 
 1. **No place for some answers.** v1's schema had no fields for evaluation criteria, submission items/attachments, award basis or addendum structure. The revised date survived only as free text in a note, so the original date was lost.
-2. **One prompt did everything.** Extraction, judgement and summary competed in a single answer. On the free Flash-Lite model, requirement coverage dropped: 23–24 quotes against 43 for a stronger model, and insurance limits and wage rules were missed in early runs.
+2. **One prompt did everything.** Extraction, judgement and summary competed in a single answer. On the free Flash-Lite model, requirement coverage dropped: 23-24 quotes against 43 for a stronger model, and insurance limits and wage rules were missed in early runs.
 3. **The score could contradict the evidence.** The same call that extracted requirements also scored eligibility, giving 9/10 for Port Alder while minimum qualifications (3 years, two public-sector projects, insurance) were still unconfirmed.
 4. **No measurement.** There was no token logging and no saved output, so quality changes couldn't be compared.
 
@@ -149,7 +149,7 @@ Thinking: `low` for extraction (literal work), `medium` for reasoning. Gemini 2.
 - **Free with no card.** You get an API key from Google AI Studio in one minute.
 - **1M-token context.** A 100-page RFP (about 100k tokens) fits in one request, so nothing is chunked and nothing is missed.
 - **Native structured output.** `responseSchema` makes the model return JSON in our exact shape, and zod validates it again on the server.
-- **Fast enough.** In v1 live runs the reports took 35–51 s. v2 makes 4 calls (3 in parallel), so expect a similar or slightly longer time; `npm run bench` measures it. When Google's free tier is overloaded it can be slower, so the function is allowed 300 s (the Vercel Hobby limit with Fluid compute). Thinking level `low` gives better judgement on dates and requirements without slowing it down much. (`gemini-2.5-flash` is no longer offered to new API keys, so the code also handles a retired model by moving to the next one.)
+- **Fast enough.** In v1 live runs the reports took 35-51 s. v2 makes 4 calls (3 in parallel), so expect a similar or slightly longer time; `npm run bench` measures it. When Google's free tier is overloaded it can be slower, so the function is allowed 300 s (the Vercel Hobby limit with Fluid compute). Thinking level `low` gives better judgement on dates and requirements without slowing it down much. (`gemini-2.5-flash` is no longer offered to new API keys, so the code also handles a retired model by moving to the next one.)
 - **Automatic fallback.** If the main model is rate-limited (429), busy (503) or retired (404), it waits briefly and retries once (quota errors skip straight on), then moves down the model list. On the free tier each model has its own quota (AI Studio showed 20 requests/day for each Flash model and 500/day for 3.5 Flash-Lite on our project), so spreading across models keeps the app available. A model that reports its daily quota used up, or that isn't available to the key, is remembered and skipped until the reset instead of being retried. Each attempt is capped at 45 s and the whole Gemini extraction phase at 100 s (`EXTRACT_BUDGET_MS`), so the backup always has time left within Vercel's 300 s so an overloaded model can't stall the report. If a model rejects an optional setting (400), it retries once with only the essential settings.
 - **Second provider when Gemini is busy.** Google's free tier is often overloaded (HTTP 503) or out of daily quota. If `FALLBACK_API_KEY` is set, the app switches to Mistral's free API (`mistral-small-latest`, OpenAI-compatible, one whole-document call) after one short retry. The report says which provider produced it, and the same schema validation and evidence checks apply. See `lib/openai-compat.ts`.
 - **Alternatives considered.** Groq's free tier is faster, but its tokens-per-minute limit is too low for a 100-page document in one call. GitHub Models has smaller context limits. Self-hosted models need paid GPUs.
@@ -185,7 +185,7 @@ The reasoning model scores five factors and gives a one-line reason for each. Th
 | | Port Alder permit automation (17 pp.) | Larkspur janitorial (12 pp.) |
 |---|---|---|
 | Expected decision | **BID**: core AI/automation work, Small Business set-aside | **NO_BID** (fast): janitorial, not software |
-| Traps | Proposal due printed as both Jan 8 and Jan 15, 2027; Addendum No. 1 sets **Jan 15, 3:00 PM Pacific**. No site visit. $420k cap covers 2 of 3 years. Six weighted criteria (30/20/20/15/10/5) plus a 25-point demo. Attachments A–E. | **Mandatory** site walk on Dec 3, 2026; sealed paper bids; no contract value; award to lowest responsive bidder; Forms 1–7 |
+| Traps | Proposal due printed as both Jan 8 and Jan 15, 2027; Addendum No. 1 sets **Jan 15, 3:00 PM Pacific**. No site visit. $420k cap covers 2 of 3 years. Six weighted criteria (30/20/20/15/10/5) plus a 25-point demo. Attachments A-E. | **Mandatory** site walk on Dec 3, 2026; sealed paper bids; no contract value; award to lowest responsive bidder; Forms 1-7 |
 
 `evals/expected.json` holds the hand-checked ground truth. It's used only by the benchmark, never by the app. `npm run bench` runs v1 and v2 on both PDFs with live models and scores each run:
 

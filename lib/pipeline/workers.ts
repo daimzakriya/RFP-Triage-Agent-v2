@@ -21,7 +21,7 @@ export const EXTRACTION_SYSTEM = `You extract facts from one government RFP for 
 
 RULES (apply to every task)
 - Use ONLY the RFP text supplied between the DOCUMENT markers. No outside knowledge, no assumptions about the bidder.
-- Evidence: every extracted item carries evidence = [{page, quote}]. "page" is the number from the [[PAGE n]] marker. "quote" is copied VERBATIM from that page (5–30 words). Never paraphrase inside a quote. Use "..." only to join two parts of the same sentence.
+- Evidence: every extracted item carries evidence = [{page, quote}]. "page" is the number from the [[PAGE n]] marker. "quote" is copied VERBATIM from that page (5-30 words). Never paraphrase inside a quote. Use "..." only to join two parts of the same sentence. In your own wording (everything except quotes), write plain sentences and do not use em dashes or en dashes; use a comma, colon or full stop instead.
 - Missing information: use null (or status "not_stated"). Never invent a value to fill a field.
 - Copy numbers, money, percentages, durations, distances and dates exactly as written.
 - Ambiguity or conflict in the RFP text: do not silently pick one reading. Report it in "ambiguities" with evidence for each side.

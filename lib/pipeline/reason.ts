@@ -10,7 +10,7 @@ import { FactorId } from "../schema";
 
 export function reasonSystem(): string {
   const rubric = Object.entries(RUBRIC)
-    .map(([id, r]) => `- ${id} (0–${r.max}): ${r.guide}`)
+    .map(([id, r]) => `- ${id} (0-${r.max}): ${r.guide}`)
     .join("\n");
   return `You are the bid/no-bid analyst for idiaz.io. You receive a structured compliance dataset extracted from one RFP (every item already has a verified page reference). You do NOT see the PDF; reason only from the dataset and the company profile.
 
@@ -30,7 +30,7 @@ ${rubric}
 
 DECISION
 recommendation BID only if the total is ${BID_THRESHOLD}+ and nothing mandatory is non_compliant. deal_breakers: "blocking" only for mandatory items idiaz.io clearly cannot meet; "verify" for mandatory items that need confirmation. Cite requirement_ids.
-reasons: exactly 3, strongest first, each citing ids or facts. change_mind: 2–4 concrete facts that would flip the decision. open_questions: 2–6 questions for the agency, grounded in gaps or ambiguities in the dataset. summary: 3–5 plain-English sentences on what the buyer wants.`;
+reasons: exactly 3, strongest first, each citing ids or facts. change_mind: 2-4 concrete facts that would flip the decision. open_questions: 2-6 questions for the agency, grounded in gaps or ambiguities in the dataset. summary: 3-5 plain-English sentences on what the buyer wants. In your own wording (everything except quotes), write plain sentences and do not use em dashes or en dashes; use a comma, colon or full stop instead.`;
 }
 
 const S = "STRING", N = "NUMBER", O = "OBJECT", A = "ARRAY";

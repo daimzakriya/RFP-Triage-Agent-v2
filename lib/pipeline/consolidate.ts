@@ -127,7 +127,7 @@ const ELIGIBILITY: Requirement["category"][] = [
 /**
  * Deterministic caps so the score can't contradict the compliance findings:
  * - a mandatory requirement judged non_compliant zeroes eligibility (and is a blocking deal-breaker);
- * - mandatory eligibility items that are unknown/verify cap eligibility (1.5 for 1–2 items, 1 for 3+).
+ * - mandatory eligibility items that are unknown/verify cap eligibility (1.5 for 1-2 items, 1 for 3+).
  */
 export function applyComplianceCaps(
   factors: ScoredFactor[],

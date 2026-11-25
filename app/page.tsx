@@ -439,7 +439,6 @@ export default function Home() {
           </div>
 
           <footer className="foot">
-            <span>idiaz.io // make software do the work</span>
             <span>AI output is advisory. Check flagged items against the source.</span>
           </footer>
         </main>

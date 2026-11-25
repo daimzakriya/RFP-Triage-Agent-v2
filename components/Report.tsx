@@ -8,7 +8,7 @@ import { CategoryContext, EvidenceList } from "./Evidence";
 import { Icon } from "./Icon";
 import { Legend } from "./PdfEvidenceViewer";
 
-/** Circular fit gauge (0–10). */
+/** Circular fit gauge (0 to 10). */
 function Ring({ value, tone }: { value: number; tone: "bid" | "nobid" | "pending" }) {
   const r = 52;
   const c = 2 * Math.PI * r;
@@ -128,6 +128,21 @@ export function Report({
         t.closest(".ev-row")?.querySelector<HTMLButtonElement>(".src-btn")?.click();
       }}
     >
+      {/* ---------- print-only cover header ---------- */}
+      <header className="print-only print-cover" aria-hidden="true">
+        <div className="pc-top">
+          <div className="pc-brand">
+            <svg width="22" height="22" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="9" fill="#24305e" /><circle cx="16" cy="9.5" r="2.4" fill="#fff" /><rect x="13.6" y="13.5" width="4.8" height="11" rx="2.4" fill="#fff" /></svg>
+            <span>idiaz.io</span>
+          </div>
+          <div className="pc-doc">Bid / no-bid assessment</div>
+        </div>
+        <div className="pc-meta">
+          <span>Prepared {new Date(r.generatedAt).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" })}</span>
+          <span>Source: {r.document.fileName} ({r.document.pageCount} pages)</span>
+        </div>
+      </header>
+
       {/* ---------- decision ---------- */}
       <section className="card hero-card" id="sec-verdict" aria-labelledby="decision-h">
         <div className="hero">
@@ -136,7 +151,7 @@ export function Report({
             <div className="verdict-ring">
               <Ring value={r.degraded ? 0 : r.fit_score} tone={r.degraded ? "pending" : bid ? "bid" : "nobid"} />
               <div className="verdict-center">
-                {r.degraded ? <span className="ring-na">—</span> : <><b>{r.fit_score}</b><span>/10 fit</span></>}
+                {r.degraded ? <span className="ring-na">?</span> : <><b>{r.fit_score}</b><span>/10 fit</span></>}
               </div>
             </div>
             <div className="word" id="decision-h">{r.degraded ? "NO CALL YET" : bid ? "BID" : "NO BID"}</div>
@@ -425,7 +440,7 @@ export function Report({
                           {c.name} <EvidenceList evidence={c.evidence} />
                           {c.notes && <div className="note">{c.notes}</div>}
                         </td>
-                        <td className="days" style={{ textAlign: "right" }}>{c.points ?? "—"}</td>
+                        <td className="days" style={{ textAlign: "right" }}>{c.points ?? "n/a"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -505,10 +520,6 @@ export function Report({
         </div>
       </div>
 
-      <p className="small muted" style={{ marginTop: 14 }}>
-        {r.document.fileName}, {r.document.pageCount} pages. Analysed{" "}
-        {new Date(r.generatedAt).toLocaleString(undefined, { day: "numeric", month: "long", year: "numeric", hour: "numeric", minute: "2-digit" })}.
-      </p>
     </div>
     </CategoryContext.Provider>
   );

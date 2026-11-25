@@ -220,7 +220,7 @@ const rows: [string, (m: Metrics) => string][] = [
 let md = `# Benchmark ${outDir.split("/").pop()}\n\n${useFixture ? "**Fixture mode: recorded answers, not live model output.**\n\n" : ""}`;
 for (const [file, byP] of Object.entries(results)) {
   md += `## ${file.split("/").pop()}\n\n| Metric | ${pipelines.join(" | ")} |\n|---|${pipelines.map(() => "---").join("|")}|\n`;
-  for (const [name, f] of rows) md += `| ${name} | ${pipelines.map((p) => (byP[p] ? f(byP[p]) : "—")).join(" | ")} |\n`;
+  for (const [name, f] of rows) md += `| ${name} | ${pipelines.map((p) => (byP[p] ? f(byP[p]) : "n/a")).join(" | ")} |\n`;
   md += "\n";
 }
 writeFileSync(`${outDir}/summary.md`, md);

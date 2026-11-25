@@ -21,7 +21,7 @@ describe("PDF extraction", () => {
     expect(rfp1).toHaveLength(17);
     expect(rfp2).toHaveLength(12);
   });
-  it("removes seal/logo noise (runs of 1–2 character lines)", () => {
+  it("removes seal/logo noise (runs of 1-2 character lines)", () => {
     expect(cleanPageText("TITLE\nC\nI\nT\nY\nO\nF\nNext line")).toBe("TITLE\nNext line");
     expect(rfp1[0]).not.toMatch(/\nC\nI\nT\nY\n/);
   });

@@ -16,7 +16,7 @@ import type { TriageReport, VerifiedEvidence } from "./schema";
 /* Geometry                                                            */
 /* ------------------------------------------------------------------ */
 
-/** One text run on a page. x, y (top), w, h are fractions of the page size (0–1). */
+/** One text run on a page. x, y (top), w, h are fractions of the page size (0 to 1). */
 export interface TextRun {
   s: string;
   x: number;
@@ -138,7 +138,7 @@ function allIndexes(hay: string, needle: string, from = 0): number[] {
   return out;
 }
 
-/** Boxes covering compact chars [start, end) — one box per run piece, merged per line. */
+/** Boxes covering compact chars [start, end): one box per run piece, merged per line. */
 function boxesFor(runs: TextRun[], map: CharMap, start: number, end: number): Box[] {
   const pieces = new Map<number, { a: number; b: number }>();
   for (let k = start; k < end; k++) {

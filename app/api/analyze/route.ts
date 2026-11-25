@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   try {
     body = BodySchema.parse(await req.json());
   } catch {
-    return error(`Invalid request. Send { fileName, pages[] } with 1–${LIMITS.maxPages} pages of text.`, 400);
+    return error(`Invalid request. Send { fileName, pages[] } with 1-${LIMITS.maxPages} pages of text.`, 400);
   }
   const chars = body.pages.reduce((n, p) => n + p.length, 0);
   if (chars > LIMITS.maxChars) {

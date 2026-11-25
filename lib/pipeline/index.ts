@@ -49,7 +49,7 @@ async function runWorker(spec: WorkerSpec, pages: string[], pageNumbers: number[
     }
     try {
       const r = await callTask({ task: `extract.${spec.id}`, system: EXTRACTION_SYSTEM, user, schema: spec.schema, models: extractionModels(), thinkingLevel: "low", signal, allowBackup: false,
-        // Speed: extraction calls take 5–20 s. If a model is busy, switch to the next one at once
+        // Speed: extraction calls take 5-20 s. If a model is busy, switch to the next one at once
         // (each model has separate capacity) instead of waiting to retry the same one.
         busyWaits: [], attemptMs: Number(process.env.EXTRACT_ATTEMPT_MS ?? 30_000) });
       results.push(r);

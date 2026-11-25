@@ -25,7 +25,7 @@ export function looksLikePdf(bytes: Uint8Array): boolean {
 
 /**
  * Remove layout noise that pdf.js produces:
- *  - circular seals / logos come out as long runs of 1–2 character lines
+ *  - circular seals / logos come out as long runs of 1-2 character lines
  *  - repeated whitespace
  */
 export function cleanPageText(raw: string): string {
